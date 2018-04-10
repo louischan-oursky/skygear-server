@@ -539,3 +539,40 @@ func TestRedisStorePrefix(t *testing.T) {
 		})
 	})
 }
+
+func TestUnmarshalTokenJSON(t *testing.T) {
+	Convey("Unmarshal 0.x format", t, func() {
+		tokenJSON := []byte(`
+			{
+				"accessToken": "a",
+				"expiredAt": "2018-01-01T00:00:00.000000Z",
+				"appName": "b",
+				"userInfoID": "c",
+				"issuedAt": "2017-01-01T00:00:00.000000Z"
+			}
+		`)
+		token := Token{}
+		err := token.UnmarshalJSON(tokenJSON)
+		So(err, ShouldBeNil)
+		So(token.AccessToken, ShouldEqual, "a")
+		So(token.AppName, ShouldEqual, "b")
+		So(token.AuthInfoID, ShouldEqual, "c")
+	})
+	Convey("Unmarshal 1.x format", t, func() {
+		tokenJSON := []byte(`
+			{
+				"accessToken": "a",
+				"expiredAt": "2018-01-01T00:00:00.000000Z",
+				"appName": "b",
+				"authInfoID": "c",
+				"issuedAt": "2017-01-01T00:00:00.000000Z"
+			}
+		`)
+		token := Token{}
+		err := token.UnmarshalJSON(tokenJSON)
+		So(err, ShouldBeNil)
+		So(token.AccessToken, ShouldEqual, "a")
+		So(token.AppName, ShouldEqual, "b")
+		So(token.AuthInfoID, ShouldEqual, "c")
+	})
+}

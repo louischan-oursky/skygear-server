@@ -53,7 +53,7 @@ func (t Token) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements the json.Unmarshaler interface.
 func (t *Token) UnmarshalJSON(data []byte) (err error) {
-	token := jsonToken{}
+	token := jsonToken2{}
 	if err := json.Unmarshal(data, &token); err != nil {
 		return err
 	}
@@ -67,13 +67,26 @@ func (t *Token) UnmarshalJSON(data []byte) (err error) {
 	t.AccessToken = token.AccessToken
 	t.ExpiredAt = expireAt
 	t.AppName = token.AppName
-	t.AuthInfoID = token.AuthInfoID
+	if token.UserInfoID != "" {
+		t.AuthInfoID = token.UserInfoID
+	} else {
+		t.AuthInfoID = token.AuthInfoID
+	}
 	t.issuedAt = issuedAt
 	return nil
 }
 
 func (t Token) IssuedAt() time.Time {
 	return t.issuedAt
+}
+
+type jsonToken2 struct {
+	AccessToken string    `json:"accessToken"`
+	ExpiredAt   jsonStamp `json:"expiredAt"`
+	AppName     string    `json:"appName"`
+	AuthInfoID  string    `json:"authInfoID,omitempty"`
+	UserInfoID  string    `json:"userInfoID,omitempty"`
+	issuedAt    jsonStamp `json:"issuedAt"`
 }
 
 type jsonToken struct {
