@@ -109,6 +109,34 @@ func TestRequiredConfig(t *testing.T) {
 			os.Setenv("APNS_ENABLE", "")
 		})
 
+		Convey("Validate captcha config", func() {
+			config := NewConfigurationWithKeys()
+
+			os.Setenv("CAPTCHA_PROVIDER", "")
+			config.readCaptcha()
+			So(config.Validate(), ShouldBeNil)
+
+			os.Setenv("CAPTCHA_PROVIDER", "wat")
+			config.readCaptcha()
+			So(config.Validate(), ShouldNotBeNil)
+
+			os.Setenv("CAPTCHA_PROVIDER", "tencent")
+			config.readCaptcha()
+			So(config.Validate(), ShouldNotBeNil)
+
+			os.Setenv("CAPTCHA_TENCENT_APP_ID", "a")
+			config.readCaptcha()
+			So(config.Validate(), ShouldNotBeNil)
+
+			os.Setenv("CAPTCHA_TENCENT_APP_SECRET_KEY", "b")
+			config.readCaptcha()
+			So(config.Validate(), ShouldBeNil)
+
+			os.Setenv("CAPTCHA_PROVIDER", "")
+			os.Setenv("CAPTCHA_TENCENT_APP_ID", "")
+			os.Setenv("CAPTCHA_TENCENT_APP_SECRET_KEY", "")
+		})
+
 		Convey("Read token store config correctly", func() {
 			config := NewConfigurationWithKeys()
 			os.Setenv("TOKEN_STORE", "redis")
@@ -246,6 +274,34 @@ func TestRequiredConfig(t *testing.T) {
 			os.Setenv("USER_AUDIT_PW_HISTORY_SIZE", "")
 			os.Setenv("USER_AUDIT_PW_HISTORY_DAYS", "")
 			os.Setenv("USER_AUDIT_PW_EXPIRY_DAYS", "")
+		})
+
+		Convey("Captcha default values", func() {
+			config := NewConfigurationWithKeys()
+			config.readCaptcha()
+			So(config.Captcha.Provider, ShouldEqual, "")
+			So(config.Captcha.Tencent.AppID, ShouldEqual, "")
+			So(config.Captcha.Tencent.AppSecretKey, ShouldEqual, "")
+			So(config.Captcha.Tencent.VerificationServerURL, ShouldEqual, "")
+		})
+
+		Convey("Read captcha config correctly", func() {
+			config := NewConfigurationWithKeys()
+			os.Setenv("CAPTCHA_PROVIDER", "tencent")
+			os.Setenv("CAPTCHA_TENCENT_APP_ID", "a")
+			os.Setenv("CAPTCHA_TENCENT_APP_SECRET_KEY", "b")
+			os.Setenv("CAPTCHA_TENCENT_VERIFICATION_SERVER_URL", "c")
+
+			config.readCaptcha()
+			So(config.Captcha.Provider, ShouldEqual, "tencent")
+			So(config.Captcha.Tencent.AppID, ShouldEqual, "a")
+			So(config.Captcha.Tencent.AppSecretKey, ShouldEqual, "b")
+			So(config.Captcha.Tencent.VerificationServerURL, ShouldEqual, "c")
+
+			os.Setenv("CAPTCHA_PROVIDER", "")
+			os.Setenv("CAPTCHA_TENCENT_APP_ID", "")
+			os.Setenv("CAPTCHA_TENCENT_APP_SECRET_KEY", "")
+			os.Setenv("CAPTCHA_TENCENT_VERIFICATION_SERVER_URL", "")
 		})
 	})
 }

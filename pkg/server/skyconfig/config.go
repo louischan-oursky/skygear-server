@@ -231,6 +231,14 @@ type Configuration struct {
 		PwHistoryDays       int      `json:"pw_history_days"`
 		PwExpiryDays        int      `json:"pw_expiry_days"`
 	} `json:"user_audit"`
+	Captcha struct {
+		Provider string `json:"provider"`
+		Tencent  struct {
+			AppID                 string `json:"app_id"`
+			AppSecretKey          string `json:"app_secret_key"`
+			VerificationServerURL string `json:"verification_server_url"`
+		} `json:"tencent"`
+	} `json:"captcha"`
 }
 
 func NewConfiguration() Configuration {
@@ -297,7 +305,10 @@ func (config *Configuration) Validate() error {
 	if config.APNS.Enable && !regexp.MustCompile("^(cert|token)$").MatchString(config.APNS.Type) {
 		return fmt.Errorf("APNS_TYPE must be cert or token")
 	}
-	return config.checkAuthRecordKeysDuplication()
+	if err := config.checkAuthRecordKeysDuplication(); err != nil {
+		return err
+	}
+	return config.validateCaptchaConfig()
 }
 
 func (config *Configuration) checkAuthRecordKeysDuplication() error {
@@ -310,6 +321,27 @@ func (config *Configuration) checkAuthRecordKeysDuplication() error {
 		check[c] = result
 	}
 
+	return nil
+}
+
+func (config *Configuration) validateCaptchaConfig() error {
+	provider := config.Captcha.Provider
+	if provider == "" {
+		return nil
+	}
+	switch provider {
+	case "tencent":
+		appID := config.Captcha.Tencent.AppID
+		if appID == "" {
+			return fmt.Errorf("CAPTCHA_TENCENT_APP_ID is not set")
+		}
+		appSecretKey := config.Captcha.Tencent.AppSecretKey
+		if appSecretKey == "" {
+			return fmt.Errorf("CAPTCHA_TENCENT_APP_SECRET_KEY is not set")
+		}
+	default:
+		return fmt.Errorf("Unsupported captcha provider: %v", provider)
+	}
 	return nil
 }
 
@@ -389,6 +421,7 @@ func (config *Configuration) ReadFromEnv() {
 	config.readLog()
 	config.readPlugins()
 	config.readUserAudit()
+	config.readCaptcha()
 }
 
 func (config *Configuration) readHost() {
@@ -687,4 +720,15 @@ func (config *Configuration) readUserAudit() {
 	if v, err := strconv.ParseInt(os.Getenv("USER_AUDIT_PW_EXPIRY_DAYS"), 10, 0); err == nil && v > 0 {
 		config.UserAudit.PwExpiryDays = int(v)
 	}
+}
+
+func (config *Configuration) readCaptcha() {
+	provider := os.Getenv("CAPTCHA_PROVIDER")
+	tencentAppID := os.Getenv("CAPTCHA_TENCENT_APP_ID")
+	tencentAppSecretKey := os.Getenv("CAPTCHA_TENCENT_APP_SECRET_KEY")
+	tencentVerificationServerURL := os.Getenv("CAPTCHA_TENCENT_VERIFICATION_SERVER_URL")
+	config.Captcha.Provider = provider
+	config.Captcha.Tencent.AppID = tencentAppID
+	config.Captcha.Tencent.AppSecretKey = tencentAppSecretKey
+	config.Captcha.Tencent.VerificationServerURL = tencentVerificationServerURL
 }
