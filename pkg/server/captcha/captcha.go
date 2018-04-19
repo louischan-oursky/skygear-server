@@ -16,6 +16,12 @@ package captcha
 
 import "net/http"
 
+// Service holds a provider. If the provider is nil,
+// then captcha is disabled.
+type Service struct {
+	Provider Provider
+}
+
 // Provider represents a captcha service provider, e.g.
 // reCAPTCHA by Google and Tencent Captcha by Tencent.
 type Provider interface {

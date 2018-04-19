@@ -31,6 +31,7 @@ import (
 	"github.com/skygeario/skygear-server/pkg/server/asset"
 	"github.com/skygeario/skygear-server/pkg/server/audit"
 	"github.com/skygeario/skygear-server/pkg/server/authtoken"
+	"github.com/skygeario/skygear-server/pkg/server/captcha"
 	"github.com/skygeario/skygear-server/pkg/server/handler"
 	"github.com/skygeario/skygear-server/pkg/server/logging"
 	"github.com/skygeario/skygear-server/pkg/server/plugin"
@@ -84,6 +85,15 @@ func main() {
 	r.ResponseTimeout = time.Duration(config.App.ResponseTimeout) * time.Second
 	serveMux := http.NewServeMux()
 	pushSender := initPushSender(config, connOpener)
+
+	captchaService := captcha.Service{}
+	if config.Captcha.Provider == "tencent" {
+		captchaService.Provider = &captcha.TencentProvider{
+			AppID:                 config.Captcha.Tencent.AppID,
+			AppSecretKey:          config.Captcha.Tencent.AppSecretKey,
+			VerificationServerURL: config.Captcha.Tencent.VerificationServerURL,
+		}
+	}
 
 	tokenStore := authtoken.InitTokenStore(authtoken.Configuration{
 		Implementation: config.TokenStore.ImplName,
@@ -196,6 +206,11 @@ func main() {
 
 	g := &inject.Graph{}
 	injectErr := g.Provide(
+		&inject.Object{
+			Value:    captchaService,
+			Complete: true,
+			Name:     "CaptchaService",
+		},
 		&inject.Object{
 			Value:    pluginContext.ProviderRegistry,
 			Complete: true,
