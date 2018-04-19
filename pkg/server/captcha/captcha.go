@@ -14,8 +14,6 @@
 
 package captcha
 
-import "net/http"
-
 // Service holds a provider. If the provider is nil,
 // then captcha is disabled.
 type Service struct {
@@ -45,21 +43,4 @@ type VerificationPayload struct {
 	// The IP address of the HTTP request that submitted
 	// the captcha challenge solution.
 	RequestIP string
-}
-
-// GetRequestIPFromHTTPRequest infers the request IP address.
-func GetRequestIPFromHTTPRequest(r *http.Request) string {
-	if r == nil {
-		return ""
-	}
-	if xff := r.Header.Get("x-forwarded-for"); xff != "" {
-		return xff
-	}
-	if xri := r.Header.Get("x-real-ip"); xri != "" {
-		return xri
-	}
-	if forwarded := r.Header.Get("forwarded"); forwarded != "" {
-		return forwarded
-	}
-	return r.RemoteAddr
 }
