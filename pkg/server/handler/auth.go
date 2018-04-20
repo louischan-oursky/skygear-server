@@ -22,6 +22,7 @@ import (
 	"github.com/skygeario/skygear-server/pkg/server/asset"
 	"github.com/skygeario/skygear-server/pkg/server/audit"
 	"github.com/skygeario/skygear-server/pkg/server/authtoken"
+	"github.com/skygeario/skygear-server/pkg/server/captcha"
 	"github.com/skygeario/skygear-server/pkg/server/plugin/hook"
 	"github.com/skygeario/skygear-server/pkg/server/plugin/provider"
 	"github.com/skygeario/skygear-server/pkg/server/router"
@@ -285,6 +286,7 @@ type loginPayload struct {
 	Password         string                 `mapstructure:"password"`
 	Provider         string                 `mapstructure:"provider"`
 	ProviderAuthData map[string]interface{} `mapstructure:"provider_auth_data"`
+	CaptchaData      map[string]interface{} `mapstructure:"captcha_data"`
 }
 
 func (payload *loginPayload) Decode(data map[string]interface{}) skyerr.Error {
@@ -324,16 +326,18 @@ curl -X POST -H "Content-Type: application/json" \
 EOF
 */
 type LoginHandler struct {
-	TokenStore       authtoken.Store    `inject:"TokenStore"`
-	ProviderRegistry *provider.Registry `inject:"ProviderRegistry"`
-	HookRegistry     *hook.Registry     `inject:"HookRegistry"`
-	AssetStore       asset.Store        `inject:"AssetStore"`
-	AuthRecordKeys   [][]string         `inject:"AuthRecordKeys"`
-	AccessKey        router.Processor   `preprocessor:"accesskey"`
-	DBConn           router.Processor   `preprocessor:"dbconn"`
-	InjectPublicDB   router.Processor   `preprocessor:"inject_public_db"`
-	PluginReady      router.Processor   `preprocessor:"plugin_ready"`
-	preprocessors    []router.Processor
+	TokenStore         authtoken.Store     `inject:"TokenStore"`
+	ProviderRegistry   *provider.Registry  `inject:"ProviderRegistry"`
+	HookRegistry       *hook.Registry      `inject:"HookRegistry"`
+	AssetStore         asset.Store         `inject:"AssetStore"`
+	AuthRecordKeys     [][]string          `inject:"AuthRecordKeys"`
+	CaptchaRateLimiter captcha.RateLimiter `inject:"CaptchaRateLimiter"`
+	CaptchaService     captcha.Service     `inject:"CaptchaService"`
+	AccessKey          router.Processor    `preprocessor:"accesskey"`
+	DBConn             router.Processor    `preprocessor:"dbconn"`
+	InjectPublicDB     router.Processor    `preprocessor:"inject_public_db"`
+	PluginReady        router.Processor    `preprocessor:"plugin_ready"`
+	preprocessors      []router.Processor
 }
 
 func (h *LoginHandler) Setup() {
@@ -350,10 +354,16 @@ func (h *LoginHandler) GetPreprocessors() []router.Processor {
 }
 
 func (h *LoginHandler) Handle(payload *router.Payload, response *router.Response) {
+	ip := h.getIP(payload)
 	info := skydb.AuthInfo{}
 
 	defer func() {
 		if response.Err != nil {
+			if skygearError, ok := response.Err.(skyerr.Error); ok {
+				if skygearError.Code() == skyerr.InvalidCredentials {
+					h.CaptchaRateLimiter.Increment(ip)
+				}
+			}
 			audit.Trail(audit.Entry{
 				AuthID: info.ID,
 				Event:  audit.EventLoginFailure,
@@ -373,6 +383,26 @@ func (h *LoginHandler) Handle(payload *router.Payload, response *router.Response
 	if skyErr != nil {
 		response.Err = skyErr
 		return
+	}
+
+	underRateLimit, err := h.CaptchaRateLimiter.Allow(ip)
+	if err != nil {
+		response.Err = skyerr.MakeError(err)
+		return
+	}
+	if !underRateLimit {
+		success, err := h.CaptchaService.Provider.Verify(captcha.VerificationPayload{
+			Data:      p.CaptchaData,
+			RequestIP: ip,
+		})
+		if err != nil {
+			response.Err = skyerr.MakeError(err)
+			return
+		}
+		if !success {
+			response.Err = skyerr.NewError(skyerr.CaptchaInvalid, "invalid captcha")
+			return
+		}
 	}
 
 	if h.TokenStore == nil {
@@ -475,6 +505,22 @@ func (h *LoginHandler) handleLoginWithProvider(payload *router.Payload, p *login
 	}
 
 	return nil
+}
+
+func (h *LoginHandler) getIP(payload *router.Payload) string {
+	if xff, ok := payload.Meta["x_forwarded_for"].(string); ok {
+		return xff
+	}
+	if xri, ok := payload.Meta["x_real_ip"].(string); ok {
+		return xri
+	}
+	if forwarded, ok := payload.Meta["forwarded"].(string); ok {
+		return forwarded
+	}
+	if remoteAddr, ok := payload.Meta["remote_addr"].(string); ok {
+		return remoteAddr
+	}
+	return ""
 }
 
 func (h *LoginHandler) handleLoginWithAuthData(payload *router.Payload, p *loginPayload, authinfo *skydb.AuthInfo, user *skydb.Record) skyerr.Error {

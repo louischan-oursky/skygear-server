@@ -27,6 +27,7 @@ import (
 	"github.com/skygeario/skygear-server/pkg/server/audit"
 	"github.com/skygeario/skygear-server/pkg/server/authtoken"
 	"github.com/skygeario/skygear-server/pkg/server/authtoken/authtokentest"
+	"github.com/skygeario/skygear-server/pkg/server/captcha"
 	"github.com/skygeario/skygear-server/pkg/server/handler/handlertest"
 	"github.com/skygeario/skygear-server/pkg/server/plugin/provider"
 	"github.com/skygeario/skygear-server/pkg/server/router"
@@ -58,6 +59,16 @@ func MakeEqualPredicateAssertion(key string, value string) func(predicate *skydb
 
 		So(valueExp.Type, ShouldEqual, skydb.Literal)
 		So(valueExp.Value, ShouldEqual, value)
+	}
+}
+
+func ReturnAuthInfo(authID string, username string, email string) func(query *skydb.Query, accessControlOptions *skydb.AccessControlOptions) (*skydb.Rows, error) {
+	return func(query *skydb.Query, accessControlOptions *skydb.AccessControlOptions) (*skydb.Rows, error) {
+		MakeUsernameEmailQueryAssertion(username, "")(query, accessControlOptions)
+		return skydb.NewRows(skydb.NewMemoryRows([]skydb.Record{skydb.Record{
+			ID:   skydb.NewRecordID("user", authID),
+			Data: map[string]interface{}{"username": username, "email": email},
+		}})), nil
 	}
 }
 
@@ -454,6 +465,52 @@ func TestSignupHandler(t *testing.T) {
 	})
 }
 
+type rateLimiter struct {
+	limit     int
+	countByID map[string]int
+}
+
+func (r *rateLimiter) Allow(id string) (bool, error) {
+	c := r.countByID[id]
+	if c >= r.limit {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (r *rateLimiter) AllowAt(id string, t time.Time) (bool, error) {
+	return r.Allow(id)
+}
+
+func (r *rateLimiter) Increment(id string) (bool, error) {
+	if r.countByID == nil {
+		r.countByID = map[string]int{}
+	}
+	c := r.countByID[id]
+	c++
+	r.countByID[id] = c
+	if c >= r.limit {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (r *rateLimiter) IncrementAt(id string, t time.Time) (bool, error) {
+	return r.Increment(id)
+}
+
+type captchaProvider struct {
+	shouldSuccess bool
+}
+
+func (p *captchaProvider) Name() string {
+	return "test"
+}
+
+func (p *captchaProvider) Verify(payload captcha.VerificationPayload) (bool, error) {
+	return p.shouldSuccess, nil
+}
+
 func TestLoginHandler(t *testing.T) {
 	Convey("LoginHandler", t, func() {
 		realTime := timeNow
@@ -471,8 +528,9 @@ func TestLoginHandler(t *testing.T) {
 
 		tokenStore := authtokentest.SingleTokenStore{}
 		handler := &LoginHandler{
-			TokenStore:     &tokenStore,
-			AuthRecordKeys: [][]string{[]string{"username"}, []string{"email"}},
+			TokenStore:         &tokenStore,
+			CaptchaRateLimiter: &captcha.NoopRateLimiter{},
+			AuthRecordKeys:     [][]string{[]string{"username"}, []string{"email"}},
 		}
 
 		Convey("login user", func() {
@@ -661,6 +719,76 @@ func TestLoginHandler(t *testing.T) {
 			So(resp.Err, ShouldBeNil)
 			So(resp.Result, ShouldHaveSameTypeAs, AuthResponse{})
 		})
+
+		Convey("Captcha", func() {
+			originalRateLimiter := handler.CaptchaRateLimiter
+			originalCaptchaService := handler.CaptchaService
+			defer func() {
+				handler.CaptchaRateLimiter = originalRateLimiter
+				handler.CaptchaService = originalCaptchaService
+			}()
+			handler.CaptchaRateLimiter = &rateLimiter{
+				limit: 1,
+			}
+			handler.CaptchaService = captcha.Service{
+				Provider: &captchaProvider{},
+			}
+
+			authinfo := skydb.NewAuthInfo("secret")
+			conn.CreateAuth(&authinfo)
+
+			db.EXPECT().
+				Query(gomock.Any(), gomock.Any()).
+				DoAndReturn(ReturnAuthInfo(authinfo.ID, "john.doe", "john.doe@example.com")).
+				AnyTimes()
+
+			resp := router.Response{}
+
+			req := router.Payload{
+				Data: map[string]interface{}{
+					"auth_data": map[string]interface{}{
+						"username": "john.doe",
+					},
+					"password": "wrongsecret",
+				},
+				DBConn:   conn,
+				Database: db,
+			}
+
+			// First, login with incorrect password
+			resp = router.Response{}
+			handler.Handle(&req, &resp)
+			So(resp.Err, ShouldImplement, (*skyerr.Error)(nil))
+			errorResponse := resp.Err.(skyerr.Error)
+			So(errorResponse.Code(), ShouldEqual, skyerr.InvalidCredentials)
+
+			// Second, captcha is required
+			resp = router.Response{}
+			handler.Handle(&req, &resp)
+			So(resp.Err, ShouldImplement, (*skyerr.Error)(nil))
+			errorResponse = resp.Err.(skyerr.Error)
+			So(errorResponse.Code(), ShouldEqual, skyerr.CaptchaInvalid)
+
+			// Finally, login success
+			req = router.Payload{
+				Data: map[string]interface{}{
+					"auth_data": map[string]interface{}{
+						"username": "john.doe",
+					},
+					"password": "secret",
+				},
+				DBConn:   conn,
+				Database: db,
+			}
+			handler.CaptchaService = captcha.Service{
+				Provider: &captchaProvider{
+					shouldSuccess: true,
+				},
+			}
+			resp = router.Response{}
+			handler.Handle(&req, &resp)
+			So(resp.Err, ShouldBeNil)
+		})
 	})
 }
 
@@ -680,9 +808,10 @@ func TestLoginHandlerWithProvider(t *testing.T) {
 		providerRegistry.RegisterAuthProvider("com.example", handlertest.NewSingleUserAuthProvider("com.example", "johndoe"))
 
 		r := handlertest.NewSingleRouteRouter(&LoginHandler{
-			TokenStore:       &tokenStore,
-			ProviderRegistry: providerRegistry,
-			AuthRecordKeys:   [][]string{[]string{"username"}, []string{"email"}},
+			CaptchaRateLimiter: &captcha.NoopRateLimiter{},
+			TokenStore:         &tokenStore,
+			ProviderRegistry:   providerRegistry,
+			AuthRecordKeys:     [][]string{[]string{"username"}, []string{"email"}},
 		}, func(p *router.Payload) {
 			p.DBConn = &conn
 			p.Database = txdb
