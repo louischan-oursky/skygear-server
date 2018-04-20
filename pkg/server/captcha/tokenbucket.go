@@ -16,6 +16,8 @@ package captcha
 
 import (
 	"time"
+
+	"github.com/garyburd/redigo/redis"
 )
 
 // TokenBucketInfo represents a bucket used by TokenBucket.
@@ -28,6 +30,15 @@ type TokenBucketInfo struct {
 	// The algorithm uses this and a reference time to refill
 	// tokens.
 	LastRequestedAt time.Time
+}
+
+func (i TokenBucketInfo) ToRedisInfo() RedisTokenBucketInfo {
+	redisInfo := RedisTokenBucketInfo{}
+	redisInfo.Tokens = i.Tokens
+	if !i.LastRequestedAt.IsZero() {
+		redisInfo.LastRequestedAt = i.LastRequestedAt.UnixNano()
+	}
+	return redisInfo
 }
 
 // TokenBucketStore contains storage operations required by TokenBucket.
@@ -132,4 +143,94 @@ func (p *TokenBucket) tokensFromDiff(t time.Time, lastRequestedAt time.Time) flo
 	seconds := duration.Seconds()
 	refillRate := p.refillRate()
 	return refillRate * seconds
+}
+
+type RedisTokenBucketStore struct {
+	pool     *redis.Pool
+	prefix   string
+	expiry   time.Duration
+	timeFunc func() time.Time
+}
+
+type RedisTokenBucketInfo struct {
+	Tokens          float64 `redis:"tokens"`
+	LastRequestedAt int64   `redis:"lastRequestedAt"`
+}
+
+func (i RedisTokenBucketInfo) ToInfo() TokenBucketInfo {
+	info := TokenBucketInfo{}
+	info.Tokens = i.Tokens
+	if i.LastRequestedAt != 0 {
+		info.LastRequestedAt = time.Unix(0, i.LastRequestedAt).UTC()
+	}
+	return info
+}
+
+func NewRedisTokenBucketStore(redisURL string, prefix string, expiry time.Duration, timeFunc func() time.Time) *RedisTokenBucketStore {
+	store := RedisTokenBucketStore{}
+	if prefix != "" {
+		store.prefix = prefix + ":"
+	}
+	store.pool = &redis.Pool{
+		MaxIdle: 50,
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.DialURL(redisURL)
+			if err != nil {
+				return nil, err
+			}
+			return c, err
+		},
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			_, err := c.Do("PING")
+			return err
+		},
+	}
+	store.expiry = expiry
+	if timeFunc == nil {
+		timeFunc = time.Now
+	}
+	store.timeFunc = timeFunc
+	return &store
+}
+
+func (s *RedisTokenBucketStore) Get(id string) (TokenBucketInfo, bool, error) {
+	c := s.pool.Get()
+	if err := c.Err(); err != nil {
+		return TokenBucketInfo{}, false, err
+	}
+	defer c.Close()
+	key := s.prefix + id
+	v, err := redis.Values(c.Do("HGETALL", key))
+	if err != nil {
+		return TokenBucketInfo{}, false, err
+	}
+	if len(v) == 0 {
+		return TokenBucketInfo{}, false, nil
+	}
+
+	var redisInfo RedisTokenBucketInfo
+	err = redis.ScanStruct(v, &redisInfo)
+	if err != nil {
+		return TokenBucketInfo{}, false, err
+	}
+	return redisInfo.ToInfo(), true, nil
+}
+
+func (s *RedisTokenBucketStore) Set(id string, info TokenBucketInfo) error {
+	c := s.pool.Get()
+	if err := c.Err(); err != nil {
+		return err
+	}
+	defer c.Close()
+	key := s.prefix + id
+	redisInfo := info.ToRedisInfo()
+	args := redis.Args{}.Add(key).AddFlat(redisInfo)
+	c.Send("MULTI")
+	c.Send("HMSET", args...)
+	c.Send("EXPIREAT", key, s.timeFunc().Add(s.expiry).Unix())
+	_, err := c.Do("EXEC")
+	if err != nil {
+		return err
+	}
+	return nil
 }

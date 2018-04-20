@@ -15,8 +15,11 @@
 package captcha
 
 import (
+	"os"
 	"testing"
 	"time"
+
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 type tokenBucketStore struct {
@@ -115,4 +118,35 @@ func TestTokenBucket(t *testing.T) {
 			t.Error("unexpected", actual, item.expected, item.t)
 		}
 	}
+}
+
+func clearRedisTokenBucketStore(s *RedisTokenBucketStore) {
+	c := s.pool.Get()
+	defer c.Close()
+	c.Do("FLUSHDB")
+}
+
+func TestRedisTokenBucketStore(t *testing.T) {
+	store := NewRedisTokenBucketStore(os.Getenv("REDISTEST"), "", 3*time.Second, nil)
+	defer clearRedisTokenBucketStore(store)
+
+	Convey("RedisTokenBucketStore get and set", t, func() {
+		info1 := TokenBucketInfo{
+			Tokens:          42,
+			LastRequestedAt: time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
+		}
+		So(store.Set("id", info1), ShouldBeNil)
+
+		info2, ok, err := store.Get("id")
+		So(err, ShouldBeNil)
+		So(ok, ShouldBeTrue)
+		So(info1.Tokens, ShouldEqual, info2.Tokens)
+		So(info1.LastRequestedAt.UnixNano(), ShouldEqual, info2.LastRequestedAt.UnixNano())
+
+		time.Sleep(3 * time.Second)
+
+		_, ok, err = store.Get("id")
+		So(err, ShouldBeNil)
+		So(ok, ShouldBeFalse)
+	})
 }
