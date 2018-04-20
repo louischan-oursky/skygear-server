@@ -107,7 +107,7 @@ func TestTokenBucket(t *testing.T) {
 		{false, time.Date(2018, 1, 1, 0, 0, 3682, 1000, time.UTC)},
 	}
 	for _, item := range timeline {
-		actual, err := rateLimiter.AllowAt("id", item.t)
+		actual, err := rateLimiter.IncrementAt("id", item.t)
 		if err != nil {
 			t.Error("unexpected error", err)
 		}

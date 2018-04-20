@@ -26,17 +26,25 @@ type Rate struct {
 	Duration time.Duration
 }
 
-// RateLimiter provides rate limiting
+// RateLimiter provides rate limiting.
+// The id can be as simple as the IP address of the HTTP request,
+// or a concatenation of the IP address and the URL path.
+// An error is returned when the implementation's store
+// encounters an I/O error.
 type RateLimiter interface {
 	// Allow is AllowAt(id, time.Now().UTC()).
 	Allow(id string) (bool, error)
+
 	// AllowAt determines whether the request identified by id received at t
 	// is allowed to proceed.
-	// The id can be as simple as the IP address of the HTTP request,
-	// or a concatenation of the IP address and the URL path.
-	// An error is returned when the implementation's store
-	// encounters an I/O error.
+	// It does not have side effects.
 	AllowAt(id string, t time.Time) (bool, error)
+
+	// Increment is IncrementAt(id, time.Now().UTC()).
+	Increment(id string) (bool, error)
+	// IncrementAt works like AllowAt but it also records the request, so it
+	// has side effects.
+	IncrementAt(id string, t time.Time) (bool, error)
 }
 
 // TokenBucketInfo represents a bucket used by TokenBucket.
@@ -68,7 +76,23 @@ type TokenBucket struct {
 	Rate  Rate
 }
 
+func (p *TokenBucket) Allow(id string) (bool, error) {
+	return p.do(id, time.Now().UTC(), false)
+}
+
 func (p *TokenBucket) AllowAt(id string, t time.Time) (bool, error) {
+	return p.do(id, t, false)
+}
+
+func (p *TokenBucket) IncrementAt(id string, t time.Time) (bool, error) {
+	return p.do(id, t, true)
+}
+
+func (p *TokenBucket) Increment(id string) (bool, error) {
+	return p.do(id, time.Now().UTC(), true)
+}
+
+func (p *TokenBucket) do(id string, t time.Time, set bool) (bool, error) {
 	info, ok, err := p.Store.Get(id)
 	if err != nil {
 		return false, err
@@ -100,16 +124,14 @@ func (p *TokenBucket) AllowAt(id string, t time.Time) (bool, error) {
 		info.Tokens -= 1.0
 	}
 	info.LastRequestedAt = t
-	// Store the info
-	err = p.Store.Set(id, info)
-	if err != nil {
-		return false, err
+	if set {
+		// Store the info
+		err = p.Store.Set(id, info)
+		if err != nil {
+			return false, err
+		}
 	}
 	return ret, nil
-}
-
-func (p *TokenBucket) Allow(id string) (bool, error) {
-	return p.AllowAt(id, time.Now().UTC())
 }
 
 func (p *TokenBucket) tokensFromRate() float64 {
