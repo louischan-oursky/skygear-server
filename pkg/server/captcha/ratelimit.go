@@ -46,3 +46,22 @@ type RateLimiter interface {
 	// has side effects.
 	IncrementAt(id string, t time.Time) (bool, error)
 }
+
+// NoopRateLimiter does not impose any rate limit.
+type NoopRateLimiter struct{}
+
+func (r *NoopRateLimiter) Allow(id string) (bool, error) {
+	return true, nil
+}
+
+func (r *NoopRateLimiter) AllowAt(id string, t time.Time) (bool, error) {
+	return true, nil
+}
+
+func (r *NoopRateLimiter) Increment(id string) (bool, error) {
+	return true, nil
+}
+
+func (r *NoopRateLimiter) IncrementAt(id string, t time.Time) (bool, error) {
+	return true, nil
+}
