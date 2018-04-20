@@ -153,6 +153,10 @@ const (
 	// UserDisabled is returned when the user account is disabled.
 	UserDisabled
 
+	// CaptchaInvalid is returned when the captcha challenge solution could not
+	// be verified.
+	CaptchaInvalid
+
 	// Error codes for expected error condition should be placed
 	// above this line.
 )
