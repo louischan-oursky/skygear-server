@@ -112,8 +112,8 @@
     "mockgen",
     "mockgen/model"
   ]
-  revision = "13f360950a79f5864a972c786a10a50e44b69541"
-  version = "v1.0.0"
+  revision = "0d6884b72b943387bb12268d5178dde0e759e49a"
+  version = "v1.0.1"
 
 [[projects]]
   name = "github.com/google/go-gcm"
@@ -337,6 +337,7 @@
   branch = "master"
   name = "golang.org/x/net"
   packages = [
+    "context",
     "http2",
     "http2/hpack",
     "idna",
@@ -384,6 +385,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "4ff6ad559863fa38144be7c314d2ea086d504b9c0332c37aace61dcce8e4b5c7"
+  inputs-digest = "6ae4f351f44757c69613141a2ae2ff5a3e86fab1a4ffcc72f991872d96d73bc2"
   solver-name = "gps-cdcl"
   solver-version = 1
