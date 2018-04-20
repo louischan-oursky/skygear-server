@@ -232,8 +232,15 @@ type Configuration struct {
 		PwExpiryDays        int      `json:"pw_expiry_days"`
 	} `json:"user_audit"`
 	Captcha struct {
-		Provider string `json:"provider"`
-		Tencent  struct {
+		Provider  string `json:"provider"`
+		RateLimit struct {
+			Enabled        bool   `json:"enabled"`
+			Number         int    `json:"number"`
+			DurationSec    int    `json:"duration_sec"`
+			RedisURL       string `json:"redis_url"`
+			RedisKeyPrefix string `json:"redis_key_prefix"`
+		} `json:"rate_limit"`
+		Tencent struct {
 			AppID                 string `json:"app_id"`
 			AppSecretKey          string `json:"app_secret_key"`
 			VerificationServerURL string `json:"verification_server_url"`
@@ -325,7 +332,23 @@ func (config *Configuration) checkAuthRecordKeysDuplication() error {
 }
 
 func (config *Configuration) validateCaptchaConfig() error {
+	requireProvider := false
+	if config.Captcha.RateLimit.Enabled {
+		requireProvider = true
+		if config.Captcha.RateLimit.Number <= 0 {
+			return fmt.Errorf("CAPTCHA_RATE_LIMIT_NUMBER is not set")
+		}
+		if config.Captcha.RateLimit.DurationSec <= 0 {
+			return fmt.Errorf("CAPTCHA_RATE_LIMIT_DURATION_SEC is not set")
+		}
+		if config.Captcha.RateLimit.RedisURL == "" {
+			return fmt.Errorf("CAPTCHA_RATE_LIMIT_REDIS_URL is not set")
+		}
+	}
 	provider := config.Captcha.Provider
+	if requireProvider && provider == "" {
+		return fmt.Errorf("CAPTCHA_PROVIDER is not set")
+	}
 	if provider == "" {
 		return nil
 	}
@@ -724,9 +747,22 @@ func (config *Configuration) readUserAudit() {
 
 func (config *Configuration) readCaptcha() {
 	provider := os.Getenv("CAPTCHA_PROVIDER")
+	if v, err := parseBool(os.Getenv("CAPTCHA_RATE_LIMIT_ENABLED")); err == nil {
+		config.Captcha.RateLimit.Enabled = v
+	}
+	if v, err := strconv.ParseInt(os.Getenv("CAPTCHA_RATE_LIMIT_NUMBER"), 10, 0); err == nil {
+		config.Captcha.RateLimit.Number = int(v)
+	}
+	if v, err := strconv.ParseInt(os.Getenv("CAPTCHA_RATE_LIMIT_DURATION_SEC"), 10, 0); err == nil {
+		config.Captcha.RateLimit.DurationSec = int(v)
+	}
+	redisURL := os.Getenv("CAPTCHA_RATE_LIMIT_REDIS_URL")
+	redisKeyPrefix := os.Getenv("CAPTCHA_RATE_LIMIT_REDIS_KEY_PREFIX")
 	tencentAppID := os.Getenv("CAPTCHA_TENCENT_APP_ID")
 	tencentAppSecretKey := os.Getenv("CAPTCHA_TENCENT_APP_SECRET_KEY")
 	tencentVerificationServerURL := os.Getenv("CAPTCHA_TENCENT_VERIFICATION_SERVER_URL")
+	config.Captcha.RateLimit.RedisURL = redisURL
+	config.Captcha.RateLimit.RedisKeyPrefix = redisKeyPrefix
 	config.Captcha.Provider = provider
 	config.Captcha.Tencent.AppID = tencentAppID
 	config.Captcha.Tencent.AppSecretKey = tencentAppSecretKey

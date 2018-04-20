@@ -137,6 +137,40 @@ func TestRequiredConfig(t *testing.T) {
 			os.Setenv("CAPTCHA_TENCENT_APP_SECRET_KEY", "")
 		})
 
+		Convey("Validate captcha rate limit config", func() {
+			config := NewConfigurationWithKeys()
+			os.Setenv("CAPTCHA_PROVIDER", "tencent")
+			os.Setenv("CAPTCHA_TENCENT_APP_ID", "a")
+			os.Setenv("CAPTCHA_TENCENT_APP_SECRET_KEY", "b")
+
+			config.readCaptcha()
+			So(config.Validate(), ShouldBeNil)
+
+			os.Setenv("CAPTCHA_RATE_LIMIT_ENABLED", "yes")
+			config.readCaptcha()
+			So(config.Validate(), ShouldNotBeNil)
+
+			os.Setenv("CAPTCHA_RATE_LIMIT_NUMBER", "1")
+			config.readCaptcha()
+			So(config.Validate(), ShouldNotBeNil)
+
+			os.Setenv("CAPTCHA_RATE_LIMIT_DURATION_SEC", "1")
+			config.readCaptcha()
+			So(config.Validate(), ShouldNotBeNil)
+
+			os.Setenv("CAPTCHA_RATE_LIMIT_REDIS_URL", "redis://redis")
+			config.readCaptcha()
+			So(config.Validate(), ShouldBeNil)
+
+			os.Setenv("CAPTCHA_RATE_LIMIT_ENABLED", "")
+			os.Setenv("CAPTCHA_RATE_LIMIT_NUMBER", "")
+			os.Setenv("CAPTCHA_RATE_LIMIT_DURATION_SEC", "")
+			os.Setenv("CAPTCHA_RATE_LIMIT_REDIS_URL", "")
+			os.Setenv("CAPTCHA_PROVIDER", "")
+			os.Setenv("CAPTCHA_TENCENT_APP_ID", "")
+			os.Setenv("CAPTCHA_TENCENT_APP_SECRET_KEY", "")
+		})
+
 		Convey("Read token store config correctly", func() {
 			config := NewConfigurationWithKeys()
 			os.Setenv("TOKEN_STORE", "redis")
@@ -279,6 +313,11 @@ func TestRequiredConfig(t *testing.T) {
 		Convey("Captcha default values", func() {
 			config := NewConfigurationWithKeys()
 			config.readCaptcha()
+			So(config.Captcha.RateLimit.Enabled, ShouldEqual, false)
+			So(config.Captcha.RateLimit.Number, ShouldEqual, 0)
+			So(config.Captcha.RateLimit.DurationSec, ShouldEqual, 0)
+			So(config.Captcha.RateLimit.RedisURL, ShouldEqual, "")
+			So(config.Captcha.RateLimit.RedisKeyPrefix, ShouldEqual, "")
 			So(config.Captcha.Provider, ShouldEqual, "")
 			So(config.Captcha.Tencent.AppID, ShouldEqual, "")
 			So(config.Captcha.Tencent.AppSecretKey, ShouldEqual, "")
@@ -287,17 +326,32 @@ func TestRequiredConfig(t *testing.T) {
 
 		Convey("Read captcha config correctly", func() {
 			config := NewConfigurationWithKeys()
+			os.Setenv("CAPTCHA_RATE_LIMIT_ENABLED", "yes")
+			os.Setenv("CAPTCHA_RATE_LIMIT_NUMBER", "5")
+			os.Setenv("CAPTCHA_RATE_LIMIT_DURATION_SEC", "5")
+			os.Setenv("CAPTCHA_RATE_LIMIT_REDIS_URL", "redis://redis")
+			os.Setenv("CAPTCHA_RATE_LIMIT_REDIS_KEY_PREFIX", "foobar")
 			os.Setenv("CAPTCHA_PROVIDER", "tencent")
 			os.Setenv("CAPTCHA_TENCENT_APP_ID", "a")
 			os.Setenv("CAPTCHA_TENCENT_APP_SECRET_KEY", "b")
 			os.Setenv("CAPTCHA_TENCENT_VERIFICATION_SERVER_URL", "c")
 
 			config.readCaptcha()
+			So(config.Captcha.RateLimit.Enabled, ShouldBeTrue)
+			So(config.Captcha.RateLimit.Number, ShouldEqual, 5)
+			So(config.Captcha.RateLimit.DurationSec, ShouldEqual, 5)
+			So(config.Captcha.RateLimit.RedisURL, ShouldEqual, "redis://redis")
+			So(config.Captcha.RateLimit.RedisKeyPrefix, ShouldEqual, "foobar")
 			So(config.Captcha.Provider, ShouldEqual, "tencent")
 			So(config.Captcha.Tencent.AppID, ShouldEqual, "a")
 			So(config.Captcha.Tencent.AppSecretKey, ShouldEqual, "b")
 			So(config.Captcha.Tencent.VerificationServerURL, ShouldEqual, "c")
 
+			os.Setenv("CAPTCHA_RATE_LIMIT_ENABLED", "")
+			os.Setenv("CAPTCHA_RATE_LIMIT_NUMBER", "")
+			os.Setenv("CAPTCHA_RATE_LIMIT_DURATION_SEC", "")
+			os.Setenv("CAPTCHA_RATE_LIMIT_REDIS_URL", "")
+			os.Setenv("CAPTCHA_RATE_LIMIT_REDIS_KEY_PREFIX", "")
 			os.Setenv("CAPTCHA_PROVIDER", "")
 			os.Setenv("CAPTCHA_TENCENT_APP_ID", "")
 			os.Setenv("CAPTCHA_TENCENT_APP_SECRET_KEY", "")
