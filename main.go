@@ -86,6 +86,25 @@ func main() {
 	serveMux := http.NewServeMux()
 	pushSender := initPushSender(config, connOpener)
 
+	var captchaRateLimiter captcha.RateLimiter
+	captchaRateLimiter = &captcha.NoopRateLimiter{}
+	if config.Captcha.RateLimit.Enabled {
+		duration := time.Duration(config.Captcha.RateLimit.DurationSec) * time.Second
+		rate := captcha.Rate{
+			Limit:    int64(config.Captcha.RateLimit.Number),
+			Duration: duration,
+		}
+		captchaRateLimiter = &captcha.TokenBucket{
+			Rate: rate,
+			Store: captcha.NewRedisTokenBucketStore(
+				config.Captcha.RateLimit.RedisURL,
+				config.Captcha.RateLimit.RedisKeyPrefix,
+				duration,
+				nil,
+			),
+		}
+	}
+
 	captchaService := captcha.Service{}
 	if config.Captcha.Provider == "tencent" {
 		captchaService.Provider = &captcha.TencentProvider{
@@ -206,6 +225,11 @@ func main() {
 
 	g := &inject.Graph{}
 	injectErr := g.Provide(
+		&inject.Object{
+			Value:    captchaRateLimiter,
+			Complete: true,
+			Name:     "CaptchaRateLimiter",
+		},
 		&inject.Object{
 			Value:    captchaService,
 			Complete: true,
