@@ -17,7 +17,9 @@ import (
 	"github.com/skygeario/skygear-server/pkg/gateway/handler"
 	"github.com/skygeario/skygear-server/pkg/gateway/middleware"
 	"github.com/skygeario/skygear-server/pkg/gateway/provider"
+	"github.com/skygeario/skygear-server/pkg/gateway/store"
 	pqStore "github.com/skygeario/skygear-server/pkg/gateway/store/pq"
+	standaloneStore "github.com/skygeario/skygear-server/pkg/gateway/store/standalone"
 )
 
 var config gatewayConfig.Configuration
@@ -38,14 +40,21 @@ func init() {
 func main() {
 	logger := logging.LoggerEntry("gateway")
 
-	// create gateway store
-	store, connErr := pqStore.NewGatewayStore(
-		context.Background(),
-		config.ConnectionStr,
-		logger,
-	)
-	if connErr != nil {
-		logger.WithError(connErr).Panic("Fail to create db conn")
+	var store store.GatewayStore
+	var connErr error
+	if config.Standalone.AppName != "" {
+		store = &standaloneStore.Store{
+			Standalone: config.Standalone,
+		}
+	} else {
+		store, connErr = pqStore.NewGatewayStore(
+			context.Background(),
+			config.ConnectionStr,
+			logger,
+		)
+		if connErr != nil {
+			logger.WithError(connErr).Panic("Fail to create db conn")
+		}
 	}
 	defer store.Close()
 
