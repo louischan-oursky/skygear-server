@@ -11,6 +11,8 @@ import (
 
 type EnableFileSystemTemplate bool
 
+type UseInsecureCookie bool
+
 type BootTimeDependency struct {
 	Configuration                 Configuration
 	DBPool                        db.Pool

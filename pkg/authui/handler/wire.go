@@ -79,6 +79,10 @@ func ProvideEnableFileSystemTemplate(dep *inject.BootTimeDependency) inject.Enab
 	return inject.EnableFileSystemTemplate(dep.Configuration.Template.EnableFileLoader)
 }
 
+func ProvideUseInsecureCookie(dep *inject.BootTimeDependency) inject.UseInsecureCookie {
+	return inject.UseInsecureCookie(dep.Configuration.UseInsecureCookie)
+}
+
 func ProvideValidator(dep *inject.BootTimeDependency) *validation.Validator {
 	return dep.Validator
 }
@@ -238,6 +242,7 @@ var DefaultSet = wire.NewSet(
 	ProvideContext,
 	ProvideAssetGearLoader,
 	ProvideEnableFileSystemTemplate,
+	ProvideUseInsecureCookie,
 	ProvideValidator,
 	ProvideReservedNameChecker,
 	ProvideSQLBuilder,
