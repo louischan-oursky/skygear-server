@@ -13,17 +13,17 @@ type IdentityProvider interface {
 	GetPrincipalByID(principalID string) (Principal, error)
 }
 
-type identityProviderImpl struct {
+type IdentityProviderImpl struct {
 	sqlBuilder  db.SQLBuilder
 	sqlExecutor db.SQLExecutor
 	providers   []Provider
 }
 
-func NewIdentityProvider(builder db.SQLBuilder, executor db.SQLExecutor, providers ...Provider) IdentityProvider {
-	return &identityProviderImpl{builder, executor, providers}
+func NewIdentityProvider(builder db.SQLBuilder, executor db.SQLExecutor, providers ...Provider) *IdentityProviderImpl {
+	return &IdentityProviderImpl{builder, executor, providers}
 }
 
-func (p *identityProviderImpl) ListPrincipalsByClaim(claimName string, claimValue string) ([]Principal, error) {
+func (p *IdentityProviderImpl) ListPrincipalsByClaim(claimName string, claimValue string) ([]Principal, error) {
 	principals := []Principal{}
 	for _, provider := range p.providers {
 		providerPrincipals, err := provider.ListPrincipalsByClaim(claimName, claimValue)
@@ -35,7 +35,7 @@ func (p *identityProviderImpl) ListPrincipalsByClaim(claimName string, claimValu
 	return principals, nil
 }
 
-func (p *identityProviderImpl) ListPrincipalsByUserID(userID string) ([]Principal, error) {
+func (p *IdentityProviderImpl) ListPrincipalsByUserID(userID string) ([]Principal, error) {
 	principals := []Principal{}
 	for _, provider := range p.providers {
 		providerPrincipals, err := provider.ListPrincipalsByUserID(userID)
@@ -47,7 +47,7 @@ func (p *identityProviderImpl) ListPrincipalsByUserID(userID string) ([]Principa
 	return principals, nil
 }
 
-func (p *identityProviderImpl) GetPrincipalByID(principalID string) (Principal, error) {
+func (p *IdentityProviderImpl) GetPrincipalByID(principalID string) (Principal, error) {
 	var providerID string
 
 	builder := p.sqlBuilder.Tenant().

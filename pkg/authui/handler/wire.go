@@ -16,6 +16,7 @@ import (
 	"github.com/skygeario/skygear-server/pkg/core/auth/hook"
 	"github.com/skygeario/skygear-server/pkg/core/auth/mfa"
 	"github.com/skygeario/skygear-server/pkg/core/auth/passwordhistory"
+	"github.com/skygeario/skygear-server/pkg/core/auth/principal"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal/customtoken"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal/oauth"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal/password"
@@ -246,6 +247,16 @@ func ProvideCustomTokenProvider(
 	return customtoken.NewProvider(sqlBuilder, sqlExecutor, tConfig.AppConfig.SSO.CustomToken)
 }
 
+func ProvideIdentityProvider(
+	sqlBuilder db.SQLBuilder,
+	sqlExecutor db.SQLExecutor,
+	passwordProvider password.Provider,
+	customtokenProvider customtoken.Provider,
+	oauthProvider oauth.Provider,
+) *principal.IdentityProviderImpl {
+	return principal.NewIdentityProvider(sqlBuilder, sqlExecutor, customtokenProvider, oauthProvider, passwordProvider)
+}
+
 var DefaultSet = wire.NewSet(
 	ProvideTenantConfig,
 	ProvideTenantConfigPtr,
@@ -302,9 +313,6 @@ var DefaultSet = wire.NewSet(
 	wire.Bind(new(passwordhistory.Store), new(*passwordhistory.StoreImpl)),
 	passwordhistory.NewPasswordHistoryStore,
 
-	wire.Bind(new(password.Provider), new(*password.ProviderImpl)),
-	ProvidePasswordAuthProvider,
-
 	ProvideAuditTrail,
 
 	wire.Bind(new(sms.Client), new(*sms.ClientImpl)),
@@ -329,10 +337,14 @@ var DefaultSet = wire.NewSet(
 	wire.Bind(new(hook.Provider), new(*hook.ProviderImpl)),
 	ProvideHookProvider,
 
+	wire.Bind(new(password.Provider), new(*password.ProviderImpl)),
+	ProvidePasswordAuthProvider,
 	wire.Bind(new(customtoken.Provider), new(*customtoken.ProviderImpl)),
 	ProvideCustomTokenProvider,
 	wire.Bind(new(oauth.Provider), new(*oauth.ProviderImpl)),
 	oauth.NewProvider,
+	wire.Bind(new(principal.IdentityProvider), new(*principal.IdentityProviderImpl)),
+	ProvideIdentityProvider,
 
 	wire.Bind(new(provider.AuthenticationProvider), new(*provider.AuthenticationProviderImpl)),
 	provider.NewAuthenticationProvider,
