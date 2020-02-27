@@ -15,6 +15,7 @@ import (
 	authinfopq "github.com/skygeario/skygear-server/pkg/core/auth/authinfo/pq"
 	"github.com/skygeario/skygear-server/pkg/core/auth/hook"
 	"github.com/skygeario/skygear-server/pkg/core/auth/mfa"
+	"github.com/skygeario/skygear-server/pkg/core/auth/modelprovider"
 	"github.com/skygeario/skygear-server/pkg/core/auth/passwordhistory"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal/customtoken"
@@ -345,6 +346,9 @@ var DefaultSet = wire.NewSet(
 	oauth.NewProvider,
 	wire.Bind(new(principal.IdentityProvider), new(*principal.IdentityProviderImpl)),
 	ProvideIdentityProvider,
+
+	wire.Bind(new(modelprovider.Provider), new(*modelprovider.ProviderImpl)),
+	modelprovider.NewProvider,
 
 	wire.Bind(new(provider.AuthenticationProvider), new(*provider.AuthenticationProviderImpl)),
 	provider.NewAuthenticationProvider,
