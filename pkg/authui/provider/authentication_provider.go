@@ -2,14 +2,20 @@ package provider
 
 import (
 	"fmt"
-	coreAuth "github.com/skygeario/skygear-server/pkg/core/auth"
+	"net/http"
 	"net/url"
 	"regexp"
+
+	coreAuth "github.com/skygeario/skygear-server/pkg/core/auth"
 )
 
 type AuthenticationProvider interface {
 	// AuthenticateWithPassword creates a new AuthnSession.
 	AuthenticateWithPassword(loginID string, password string) (*coreAuth.AuthnSession, error)
+
+	// Finish creates session, dispatches hook
+	// return access token and authorization code.
+	Finish(form url.Values, authnSession *coreAuth.AuthnSession) (accessToken *http.Cookie, code string, err error)
 
 	// FromToken restores a AuthnSession from a token.
 	FromToken(token string) (*coreAuth.AuthnSession, error)

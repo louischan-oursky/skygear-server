@@ -2,12 +2,14 @@ package handler
 
 import (
 	"net/http"
+	"net/url"
 
 	"github.com/gorilla/mux"
 
 	"github.com/skygeario/skygear-server/pkg/core/auth/hook"
-	"github.com/skygeario/skygear-server/pkg/core/config"
 	"github.com/skygeario/skygear-server/pkg/core/db"
+	coreHttp "github.com/skygeario/skygear-server/pkg/core/http"
+	"github.com/skygeario/skygear-server/pkg/core/oauth"
 
 	"github.com/skygeario/skygear-server/pkg/authui/inject"
 	"github.com/skygeario/skygear-server/pkg/authui/provider"
@@ -149,48 +151,59 @@ func (h *AuthorizeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	h.ValidateProvider.Prevalidate(r.Form)
 
-	do := func() error {
-		var t config.TemplateItemType
-		var data map[string]interface{}
-		var err error
+	var writeResponse func(err error)
+	err := hook.WithTx(h.HookProvider, h.TxContext, func() (err error) {
 		step := r.Form.Get("x_step")
 		switch step {
 		case "submit_password":
-			t, data, err = h.SubmitPassword(w, r)
-			h.RenderProvider.WritePage(w, r, t, data, err)
+			writeResponse, err = h.SubmitPassword(w, r)
 		case "submit_login_id":
-			t, data, err = h.SubmitLoginID(w, r)
-			h.RenderProvider.WritePage(w, r, t, data, err)
+			writeResponse, err = h.SubmitLoginID(w, r)
 		default:
-			t, data, err = h.Default(w, r)
-			h.RenderProvider.WritePage(w, r, t, data, err)
+			writeResponse, err = h.Default(w, r)
 		}
 		return err
-	}
-
-	_ = hook.WithTx(h.HookProvider, h.TxContext, do)
+	})
+	writeResponse(err)
 }
 
-func (h *AuthorizeHandler) Default(w http.ResponseWriter, r *http.Request) (t config.TemplateItemType, data map[string]interface{}, err error) {
-	t = template.TemplateItemTypeAuthUIAuthorizeHTML
-	data = provider.FormToJSON(r.Form)
+func (h *AuthorizeHandler) Default(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+	data := provider.FormToJSON(r.Form)
 	err = h.ValidateProvider.Validate("#AuthorizeRequest", data)
-	return
-}
-
-func (h *AuthorizeHandler) SubmitLoginID(w http.ResponseWriter, r *http.Request) (t config.TemplateItemType, data map[string]interface{}, err error) {
-	t = template.TemplateItemTypeAuthUIAuthorizeHTML
-	data = provider.FormToJSON(r.Form)
-	err = h.ValidateProvider.Validate("#AuthorizeLoginIDRequest", data)
-	if err == nil {
-		t = template.TemplateItemTypeAuthUIEnterPasswordHTML
+	writeResponse = func(err error) {
+		t := template.TemplateItemTypeAuthUIAuthorizeHTML
+		h.RenderProvider.WritePage(w, r, t, data, err)
 	}
 	return
 }
 
-func (h *AuthorizeHandler) SubmitPassword(w http.ResponseWriter, r *http.Request) (t config.TemplateItemType, data map[string]interface{}, err error) {
-	t = template.TemplateItemTypeAuthUIEnterPasswordHTML
-	data = provider.FormToJSON(r.Form)
+func (h *AuthorizeHandler) SubmitLoginID(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+	data := provider.FormToJSON(r.Form)
+	err = h.ValidateProvider.Validate("#AuthorizeLoginIDRequest", data)
+	writeResponse = func(err error) {
+		t := template.TemplateItemTypeAuthUIAuthorizeHTML
+		if err == nil {
+			t = template.TemplateItemTypeAuthUIEnterPasswordHTML
+		}
+		h.RenderProvider.WritePage(w, r, t, data, err)
+	}
+	return
+}
+
+func (h *AuthorizeHandler) SubmitPassword(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+	var accessToken *http.Cookie
+	var redirectURI *url.URL
+	data := provider.FormToJSON(r.Form)
+	writeResponse = func(err error) {
+		if err != nil {
+			t := template.TemplateItemTypeAuthUIEnterPasswordHTML
+			h.RenderProvider.WritePage(w, r, t, data, err)
+		} else {
+			coreHttp.UpdateCookie(w, accessToken)
+			http.Redirect(w, r, redirectURI.String(), http.StatusFound)
+		}
+	}
+
 	err = h.ValidateProvider.Validate("#AuthorizeEnterPasswordRequest", data)
 	if err != nil {
 		return
@@ -208,8 +221,16 @@ func (h *AuthorizeHandler) SubmitPassword(w http.ResponseWriter, r *http.Request
 		panic("TODO(authui): Handle MFA")
 	}
 
-	// TODO(authui): Create session
-	// TODO(authui): Dispatch hook
-	// TODO(authui): Generate authorization code and redirect
-	panic("TODO(authui)")
+	var code string
+	accessToken, code, err = h.AuthenticationProvider.Finish(r.Form, authnSession)
+	if err != nil {
+		return
+	}
+
+	redirectURI, err = oauth.NewAuthenticationResponse(r.Form, code)
+	if err != nil {
+		return
+	}
+
+	return
 }
