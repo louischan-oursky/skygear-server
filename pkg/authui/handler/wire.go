@@ -17,6 +17,7 @@ import (
 	"github.com/skygeario/skygear-server/pkg/core/auth/mfa"
 	"github.com/skygeario/skygear-server/pkg/core/auth/passwordhistory"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal/customtoken"
+	"github.com/skygeario/skygear-server/pkg/core/auth/principal/oauth"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal/password"
 	"github.com/skygeario/skygear-server/pkg/core/auth/session"
 	redisSession "github.com/skygeario/skygear-server/pkg/core/auth/session/redis"
@@ -330,6 +331,8 @@ var DefaultSet = wire.NewSet(
 
 	wire.Bind(new(customtoken.Provider), new(*customtoken.ProviderImpl)),
 	ProvideCustomTokenProvider,
+	wire.Bind(new(oauth.Provider), new(*oauth.ProviderImpl)),
+	oauth.NewProvider,
 
 	wire.Bind(new(provider.AuthenticationProvider), new(*provider.AuthenticationProviderImpl)),
 	provider.NewAuthenticationProvider,

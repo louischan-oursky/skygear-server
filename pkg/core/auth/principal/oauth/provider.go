@@ -13,29 +13,22 @@ import (
 	"github.com/skygeario/skygear-server/pkg/core/errors"
 )
 
-type providerImpl struct {
+type ProviderImpl struct {
 	sqlBuilder  db.SQLBuilder
 	sqlExecutor db.SQLExecutor
-}
-
-func newProvider(
-	builder db.SQLBuilder,
-	executor db.SQLExecutor,
-) *providerImpl {
-	return &providerImpl{
-		sqlBuilder:  builder,
-		sqlExecutor: executor,
-	}
 }
 
 func NewProvider(
 	builder db.SQLBuilder,
 	executor db.SQLExecutor,
-) Provider {
-	return newProvider(builder, executor)
+) *ProviderImpl {
+	return &ProviderImpl{
+		sqlBuilder:  builder,
+		sqlExecutor: executor,
+	}
 }
 
-func (p *providerImpl) scan(scanner db.Scanner, principal *Principal) error {
+func (p *ProviderImpl) scan(scanner db.Scanner, principal *Principal) error {
 	var tokenBytes []byte
 	var profileBytes []byte
 	var providerKeysBytes []byte
@@ -80,7 +73,7 @@ func (p *providerImpl) scan(scanner db.Scanner, principal *Principal) error {
 	return nil
 }
 
-func (p *providerImpl) GetPrincipalByProvider(options GetByProviderOptions) (*Principal, error) {
+func (p *ProviderImpl) GetPrincipalByProvider(options GetByProviderOptions) (*Principal, error) {
 	if options.ProviderKeys == nil {
 		options.ProviderKeys = map[string]interface{}{}
 	}
@@ -128,7 +121,7 @@ func (p *providerImpl) GetPrincipalByProvider(options GetByProviderOptions) (*Pr
 	return &pp, nil
 }
 
-func (p *providerImpl) GetPrincipalByUser(options GetByUserOptions) (*Principal, error) {
+func (p *ProviderImpl) GetPrincipalByUser(options GetByUserOptions) (*Principal, error) {
 	if options.ProviderKeys == nil {
 		options.ProviderKeys = map[string]interface{}{}
 	}
@@ -174,7 +167,7 @@ func (p *providerImpl) GetPrincipalByUser(options GetByUserOptions) (*Principal,
 	return &pp, nil
 }
 
-func (p *providerImpl) CreatePrincipal(principal *Principal) (err error) {
+func (p *ProviderImpl) CreatePrincipal(principal *Principal) (err error) {
 	// Create principal
 	builder := p.sqlBuilder.Tenant().
 		Insert(p.sqlBuilder.FullTableName("principal")).
@@ -244,7 +237,7 @@ func (p *providerImpl) CreatePrincipal(principal *Principal) (err error) {
 	return
 }
 
-func (p *providerImpl) UpdatePrincipal(pp *Principal) (err error) {
+func (p *ProviderImpl) UpdatePrincipal(pp *Principal) (err error) {
 	accessTokenRespBytes, err := json.Marshal(pp.AccessTokenResp)
 	if err != nil {
 		return errors.HandledWithMessage(err, "failed to update principal")
@@ -287,7 +280,7 @@ func (p *providerImpl) UpdatePrincipal(pp *Principal) (err error) {
 	return nil
 }
 
-func (p *providerImpl) DeletePrincipal(pp *Principal) (err error) {
+func (p *ProviderImpl) DeletePrincipal(pp *Principal) (err error) {
 	// Delete provider_oauth
 	builder := p.sqlBuilder.Tenant().
 		Delete(p.sqlBuilder.FullTableName("provider_oauth")).
@@ -333,7 +326,7 @@ func (p *providerImpl) DeletePrincipal(pp *Principal) (err error) {
 	return
 }
 
-func (p *providerImpl) GetPrincipalsByUserID(userID string) (principals []*Principal, err error) {
+func (p *ProviderImpl) GetPrincipalsByUserID(userID string) (principals []*Principal, err error) {
 	builder := p.sqlBuilder.Tenant().
 		Select(
 			"p.id",
@@ -372,7 +365,7 @@ func (p *providerImpl) GetPrincipalsByUserID(userID string) (principals []*Princ
 	return
 }
 
-func (p *providerImpl) GetPrincipalsByClaim(claimName string, claimValue string) (principals []*Principal, err error) {
+func (p *ProviderImpl) GetPrincipalsByClaim(claimName string, claimValue string) (principals []*Principal, err error) {
 	builder := p.sqlBuilder.Tenant().
 		Select(
 			"p.id",
@@ -408,11 +401,11 @@ func (p *providerImpl) GetPrincipalsByClaim(claimName string, claimValue string)
 	return
 }
 
-func (p *providerImpl) ID() string {
+func (p *ProviderImpl) ID() string {
 	return string(coreAuth.PrincipalTypeOAuth)
 }
 
-func (p *providerImpl) GetPrincipalByID(principalID string) (principal.Principal, error) {
+func (p *ProviderImpl) GetPrincipalByID(principalID string) (principal.Principal, error) {
 	builder := p.sqlBuilder.Tenant().
 		Select(
 			"p.id",
@@ -447,7 +440,7 @@ func (p *providerImpl) GetPrincipalByID(principalID string) (principal.Principal
 	return &pp, nil
 }
 
-func (p *providerImpl) ListPrincipalsByUserID(userID string) ([]principal.Principal, error) {
+func (p *ProviderImpl) ListPrincipalsByUserID(userID string) ([]principal.Principal, error) {
 	principals, err := p.GetPrincipalsByUserID(userID)
 	if err != nil {
 		return nil, err
@@ -461,7 +454,7 @@ func (p *providerImpl) ListPrincipalsByUserID(userID string) ([]principal.Princi
 	return genericPrincipals, nil
 }
 
-func (p *providerImpl) ListPrincipalsByClaim(claimName string, claimValue string) ([]principal.Principal, error) {
+func (p *ProviderImpl) ListPrincipalsByClaim(claimName string, claimValue string) ([]principal.Principal, error) {
 	principals, err := p.GetPrincipalsByClaim(claimName, claimValue)
 	if err != nil {
 		return nil, err
@@ -477,5 +470,5 @@ func (p *providerImpl) ListPrincipalsByClaim(claimName string, claimValue string
 
 // this ensures that our structure conform to certain interfaces.
 var (
-	_ Provider = &providerImpl{}
+	_ Provider = &ProviderImpl{}
 )
