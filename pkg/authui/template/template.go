@@ -41,7 +41,7 @@ const defineHidden = `
 const defineLogo = `
 {{ define "LOGO" }}
 {{ if .logo_url }}
-<div class="logo" style="background-image: url('{{ .logo_url }}')"></div>
+<div class="logo" style="background-image: url('{{ .logo_url }}'); background-position: center; background-size: contain; background-repeat: no-repeat"></div>
 {{ else }}
 <div class="logo"></div>
 {{ end }}

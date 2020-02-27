@@ -96,11 +96,11 @@ html {
 
 .logo {
   height: 139px;
-  /* TODO(authui): empty logo image */
-  background-color: #eaf1fc;
+  background-image: url("../image/ic_app_logo.png");
   background-position: center;
-  background-size: cover;
+  background-size: 66px 66px;
   background-repeat: no-repeat;
+  background-color: #eaf1fc;
 }
 
 .skygear-logo {
