@@ -162,7 +162,7 @@ var TemplateAuthUIEnterPasswordHTML = template.Spec{
 {{ template "HIDDEN" . }}
 
 <div class="nav-bar">
-	<div class="back-button"></div>
+	<button class="btn back-btn" onclick="window.history.back()" title="Back"></button>
 	<div class="login-id primary-txt">
 	{{ if .x_calling_code }}
 		+{{ .x_calling_code}} {{ .x_national_number }}

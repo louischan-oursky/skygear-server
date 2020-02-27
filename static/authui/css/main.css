@@ -111,11 +111,15 @@ html {
   background-image: url("../image/ic_footer_skygear.png");
 }
 
-.back-button {
+.back-btn {
   width: 36px;
   height: 36px;
   background-color: #f3f2f1;
   border-radius: 18px;
+  background-image: url("../image/ic_back_arrow.png");
+  background-position: center;
+  background-size: 16px auto;
+  background-repeat: no-repeat;
 }
 
 @media (min-width: 320px) {
