@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/skygeario/skygear-server/pkg/auth/dependency/sso"
+	"github.com/skygeario/skygear-server/pkg/core/auth/sso"
 	coreconfig "github.com/skygeario/skygear-server/pkg/core/config"
 
 	. "github.com/smartystreets/goconvey/convey"
