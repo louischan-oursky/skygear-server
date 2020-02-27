@@ -16,6 +16,7 @@ import (
 	"github.com/skygeario/skygear-server/pkg/core/auth/hook"
 	"github.com/skygeario/skygear-server/pkg/core/auth/mfa"
 	"github.com/skygeario/skygear-server/pkg/core/auth/passwordhistory"
+	"github.com/skygeario/skygear-server/pkg/core/auth/principal/customtoken"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal/password"
 	"github.com/skygeario/skygear-server/pkg/core/auth/session"
 	redisSession "github.com/skygeario/skygear-server/pkg/core/auth/session/redis"
@@ -236,6 +237,14 @@ func ProvideHookProvider(
 	)
 }
 
+func ProvideCustomTokenProvider(
+	sqlBuilder db.SQLBuilder,
+	sqlExecutor db.SQLExecutor,
+	tConfig *config.TenantConfiguration,
+) *customtoken.ProviderImpl {
+	return customtoken.NewProvider(sqlBuilder, sqlExecutor, tConfig.AppConfig.SSO.CustomToken)
+}
+
 var DefaultSet = wire.NewSet(
 	ProvideTenantConfig,
 	ProvideTenantConfigPtr,
@@ -318,6 +327,9 @@ var DefaultSet = wire.NewSet(
 	hook.NewDeliverer,
 	wire.Bind(new(hook.Provider), new(*hook.ProviderImpl)),
 	ProvideHookProvider,
+
+	wire.Bind(new(customtoken.Provider), new(*customtoken.ProviderImpl)),
+	ProvideCustomTokenProvider,
 
 	wire.Bind(new(provider.AuthenticationProvider), new(*provider.AuthenticationProviderImpl)),
 	provider.NewAuthenticationProvider,
