@@ -55,8 +55,11 @@ html {
   background-color: white;
   height: 32px;
   border-bottom: solid 1px #a19f9d;
-  /* TODO(authui): <select> arrow */
   padding: 0 28px 0 8px;
+  background-image: url("../image/ic_select_arrow.png");
+  background-position: right 5px center;
+  background-size: 12px auto;
+  background-repeat: no-repeat;
 }
 
 .text-input {
