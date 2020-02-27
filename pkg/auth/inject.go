@@ -6,7 +6,6 @@ import (
 
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/authnsession"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/forgotpwdemail"
-	"github.com/skygeario/skygear-server/pkg/auth/dependency/principal/customtoken"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/principal/oauth"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/sso"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/userverify"
@@ -23,6 +22,7 @@ import (
 	"github.com/skygeario/skygear-server/pkg/core/auth/passwordhistory"
 	"github.com/skygeario/skygear-server/pkg/core/auth/passwordpolicy"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal"
+	"github.com/skygeario/skygear-server/pkg/core/auth/principal/customtoken"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal/password"
 	"github.com/skygeario/skygear-server/pkg/core/auth/session"
 	redisSession "github.com/skygeario/skygear-server/pkg/core/auth/session/redis"

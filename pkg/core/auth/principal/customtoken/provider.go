@@ -15,33 +15,25 @@ import (
 	"github.com/skygeario/skygear-server/pkg/core/errors"
 )
 
-type providerImpl struct {
+type ProviderImpl struct {
 	sqlBuilder        db.SQLBuilder
 	sqlExecutor       db.SQLExecutor
 	customTokenConfig *config.CustomTokenConfiguration
-}
-
-func newProvider(
-	builder db.SQLBuilder,
-	executor db.SQLExecutor,
-	customTokenConfig *config.CustomTokenConfiguration,
-) *providerImpl {
-	return &providerImpl{
-		sqlBuilder:        builder,
-		sqlExecutor:       executor,
-		customTokenConfig: customTokenConfig,
-	}
 }
 
 func NewProvider(
 	builder db.SQLBuilder,
 	executor db.SQLExecutor,
 	customTokenConfig *config.CustomTokenConfiguration,
-) Provider {
-	return newProvider(builder, executor, customTokenConfig)
+) *ProviderImpl {
+	return &ProviderImpl{
+		sqlBuilder:        builder,
+		sqlExecutor:       executor,
+		customTokenConfig: customTokenConfig,
+	}
 }
 
-func (p *providerImpl) scan(scanner db.Scanner, principal *Principal) error {
+func (p *ProviderImpl) scan(scanner db.Scanner, principal *Principal) error {
 	var rawProfileBytes []byte
 	var claimsValueBytes []byte
 	err := scanner.Scan(
@@ -68,7 +60,7 @@ func (p *providerImpl) scan(scanner db.Scanner, principal *Principal) error {
 	return nil
 }
 
-func (p *providerImpl) Decode(tokenString string) (claims SSOCustomTokenClaims, err error) {
+func (p *ProviderImpl) Decode(tokenString string) (claims SSOCustomTokenClaims, err error) {
 	_, err = jwt.ParseWithClaims(
 		tokenString,
 		&claims,
@@ -83,7 +75,7 @@ func (p *providerImpl) Decode(tokenString string) (claims SSOCustomTokenClaims, 
 	return
 }
 
-func (p *providerImpl) CreatePrincipal(principal *Principal) (err error) {
+func (p *ProviderImpl) CreatePrincipal(principal *Principal) (err error) {
 	// Create principal
 	builder := p.sqlBuilder.Tenant().
 		Insert(p.sqlBuilder.FullTableName("principal")).
@@ -136,7 +128,7 @@ func (p *providerImpl) CreatePrincipal(principal *Principal) (err error) {
 	return
 }
 
-func (p *providerImpl) UpdatePrincipal(pp *Principal) (err error) {
+func (p *ProviderImpl) UpdatePrincipal(pp *Principal) (err error) {
 	rawProfileBytes, err := json.Marshal(pp.RawProfile)
 	if err != nil {
 		return errors.HandledWithMessage(err, "failed to update principal")
@@ -171,7 +163,7 @@ func (p *providerImpl) UpdatePrincipal(pp *Principal) (err error) {
 	return nil
 }
 
-func (p *providerImpl) GetPrincipalByTokenPrincipalID(tokenPrincipalID string) (*Principal, error) {
+func (p *ProviderImpl) GetPrincipalByTokenPrincipalID(tokenPrincipalID string) (*Principal, error) {
 	builder := p.sqlBuilder.Tenant().
 		Select(
 			"p.id",
@@ -200,11 +192,11 @@ func (p *providerImpl) GetPrincipalByTokenPrincipalID(tokenPrincipalID string) (
 	return &pp, nil
 }
 
-func (p *providerImpl) ID() string {
+func (p *ProviderImpl) ID() string {
 	return string(coreAuth.PrincipalTypeCustomToken)
 }
 
-func (p *providerImpl) GetPrincipalByID(principalID string) (principal.Principal, error) {
+func (p *ProviderImpl) GetPrincipalByID(principalID string) (principal.Principal, error) {
 	builder := p.sqlBuilder.Tenant().
 		Select(
 			"p.id",
@@ -235,7 +227,7 @@ func (p *providerImpl) GetPrincipalByID(principalID string) (principal.Principal
 	return &pp, nil
 }
 
-func (p *providerImpl) ListPrincipalsByUserID(userID string) (principals []principal.Principal, err error) {
+func (p *ProviderImpl) ListPrincipalsByUserID(userID string) (principals []principal.Principal, err error) {
 	builder := p.sqlBuilder.Tenant().
 		Select(
 			"p.id",
@@ -266,7 +258,7 @@ func (p *providerImpl) ListPrincipalsByUserID(userID string) (principals []princ
 	return
 }
 
-func (p *providerImpl) ListPrincipalsByClaim(claimName string, claimValue string) (principals []principal.Principal, err error) {
+func (p *ProviderImpl) ListPrincipalsByClaim(claimName string, claimValue string) (principals []principal.Principal, err error) {
 	builder := p.sqlBuilder.Tenant().
 		Select(
 			"p.id",
@@ -299,5 +291,5 @@ func (p *providerImpl) ListPrincipalsByClaim(claimName string, claimValue string
 
 // this ensures that our structure conform to certain interfaces.
 var (
-	_ Provider = &providerImpl{}
+	_ Provider = &ProviderImpl{}
 )
