@@ -9,8 +9,8 @@ import (
 	. "github.com/skygeario/skygear-server/pkg/core/skytest"
 	. "github.com/smartystreets/goconvey/convey"
 
-	"github.com/skygeario/skygear-server/pkg/auth/dependency/principal/oauth"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal"
+	"github.com/skygeario/skygear-server/pkg/core/auth/principal/oauth"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal/password"
 	authtest "github.com/skygeario/skygear-server/pkg/core/auth/testing"
 	"github.com/skygeario/skygear-server/pkg/core/config"

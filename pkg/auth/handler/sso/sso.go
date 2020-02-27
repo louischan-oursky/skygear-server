@@ -4,7 +4,6 @@ import (
 	"net/url"
 
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/authnsession"
-	"github.com/skygeario/skygear-server/pkg/auth/dependency/principal/oauth"
 	"github.com/skygeario/skygear-server/pkg/auth/model"
 	"github.com/skygeario/skygear-server/pkg/auth/task"
 	"github.com/skygeario/skygear-server/pkg/core/async"
@@ -14,6 +13,7 @@ import (
 	"github.com/skygeario/skygear-server/pkg/core/auth/hook"
 	coreAuthModel "github.com/skygeario/skygear-server/pkg/core/auth/model"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal"
+	"github.com/skygeario/skygear-server/pkg/core/auth/principal/oauth"
 	"github.com/skygeario/skygear-server/pkg/core/auth/principal/password"
 	"github.com/skygeario/skygear-server/pkg/core/auth/sso"
 	"github.com/skygeario/skygear-server/pkg/core/auth/userprofile"
