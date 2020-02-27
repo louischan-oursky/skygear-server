@@ -50,9 +50,6 @@ func (p *RenderProviderImpl) WritePage(
 	// NOTE(authui): We assume the CSS provided by the developer is trusted.
 	data["css"] = htmlTemplate.CSS(p.AuthUIConfiguration.CSS)
 
-	// TODO(authui): asset skygear logo URL
-	data["skygear_logo_url"] = "https://via.placeholder.com/65x15?text=Skygear"
-
 	data["x_calling_codes"] = phone.CountryCallingCodes
 
 	for _, keyConfig := range p.LoginIDKeys {

@@ -66,7 +66,7 @@ const defineError = `
 
 const defineSkygearLogo = `
 {{ define "SKYGEAR_LOGO" }}
-<div class="skygear-logo" style="background-image: url('{{ .skygear_logo_url }}')"></div>
+<div class="skygear-logo"></div>
 {{ end }}
 `
 
