@@ -13,6 +13,7 @@ import (
 	coreAuth "github.com/skygeario/skygear-server/pkg/core/auth"
 	"github.com/skygeario/skygear-server/pkg/core/auth/authinfo"
 	authinfopq "github.com/skygeario/skygear-server/pkg/core/auth/authinfo/pq"
+	"github.com/skygeario/skygear-server/pkg/core/auth/authorizationcode"
 	"github.com/skygeario/skygear-server/pkg/core/auth/hook"
 	"github.com/skygeario/skygear-server/pkg/core/auth/mfa"
 	"github.com/skygeario/skygear-server/pkg/core/auth/modelprovider"
@@ -52,6 +53,10 @@ var SessionListKey = redisSession.SessionListKeyFunc(func(appID string, sessionI
 
 var EventStreamKey = redisSession.EventStreamKeyFunc(func(appID string, sessionID string) string {
 	return fmt.Sprintf("%s:auth-ui:event:%s", appID, sessionID)
+})
+
+var AuthorizationCodeKey = authorizationcode.KeyFunc(func(appID string, code string) string {
+	return fmt.Sprintf("%s:auth-ui:authorization-code:%s", appID, code)
 })
 
 func ProvideTenantConfigPtr(r *http.Request) *config.TenantConfiguration {
@@ -258,6 +263,14 @@ func ProvideIdentityProvider(
 	return principal.NewIdentityProvider(sqlBuilder, sqlExecutor, customtokenProvider, oauthProvider, passwordProvider)
 }
 
+func ProvideAuthorizationCodeStore(
+	context context.Context,
+	tConfig *config.TenantConfiguration,
+	timeProvider coreTime.Provider,
+) *authorizationcode.RedisStore {
+	return authorizationcode.NewRedisStore(context, tConfig, timeProvider, AuthorizationCodeKey)
+}
+
 var DefaultSet = wire.NewSet(
 	ProvideTenantConfig,
 	ProvideTenantConfigPtr,
@@ -349,6 +362,9 @@ var DefaultSet = wire.NewSet(
 
 	wire.Bind(new(modelprovider.Provider), new(*modelprovider.ProviderImpl)),
 	modelprovider.NewProvider,
+
+	wire.Bind(new(authorizationcode.Store), new(*authorizationcode.RedisStore)),
+	ProvideAuthorizationCodeStore,
 
 	wire.Bind(new(provider.AuthenticationProvider), new(*provider.AuthenticationProviderImpl)),
 	provider.NewAuthenticationProvider,

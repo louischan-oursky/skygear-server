@@ -16,6 +16,7 @@ import (
 	"github.com/skygeario/skygear-server/pkg/core/auth"
 	"github.com/skygeario/skygear-server/pkg/core/auth/authinfo"
 	"github.com/skygeario/skygear-server/pkg/core/auth/authinfo/pq"
+	"github.com/skygeario/skygear-server/pkg/core/auth/authorizationcode"
 	"github.com/skygeario/skygear-server/pkg/core/auth/hook"
 	"github.com/skygeario/skygear-server/pkg/core/auth/mfa"
 	"github.com/skygeario/skygear-server/pkg/core/auth/modelprovider"
@@ -99,6 +100,10 @@ var SessionListKey = redis.SessionListKeyFunc(func(appID string, sessionID strin
 
 var EventStreamKey = redis.EventStreamKeyFunc(func(appID string, sessionID string) string {
 	return fmt.Sprintf("%s:auth-ui:event:%s", appID, sessionID)
+})
+
+var AuthorizationCodeKey = authorizationcode.KeyFunc(func(appID string, code string) string {
+	return fmt.Sprintf("%s:auth-ui:authorization-code:%s", appID, code)
 })
 
 func ProvideTenantConfigPtr(r *http.Request) *config.TenantConfiguration {
@@ -302,6 +307,14 @@ func ProvideIdentityProvider(
 	return principal.NewIdentityProvider(sqlBuilder, sqlExecutor, customtokenProvider, oauthProvider, passwordProvider)
 }
 
+func ProvideAuthorizationCodeStore(context2 context.Context,
+
+	tConfig *config.TenantConfiguration,
+	timeProvider time.Provider,
+) *authorizationcode.RedisStore {
+	return authorizationcode.NewRedisStore(context2, tConfig, timeProvider, AuthorizationCodeKey)
+}
+
 var DefaultSet = wire.NewSet(
 	ProvideTenantConfig,
 	ProvideTenantConfigPtr,
@@ -312,5 +325,5 @@ var DefaultSet = wire.NewSet(
 	ProvideValidator,
 	ProvideReservedNameChecker,
 	ProvideSQLBuilder,
-	ProvideSQLExecutor, template.NewEngine, urlprefix.NewProvider, wire.Bind(new(time.Provider), new(time.ProviderImpl)), time.NewProvider, wire.Bind(new(provider.RenderProvider), new(*provider.RenderProviderImpl)), provider.NewRenderProvider, wire.Bind(new(provider.ValidateProvider), new(*provider.ValidateProviderImpl)), provider.NewValidateProvider, wire.Bind(new(auth.ContextGetter), new(*provider.AuthContextProviderImpl)), wire.Bind(new(provider.AuthContextProvider), new(*provider.AuthContextProviderImpl)), provider.NewAuthContextProvider, wire.Bind(new(logging.Factory), new(*logging.FactoryImpl)), ProvideLoggingFactory, wire.Bind(new(session.Store), new(*redis.StoreImpl)), ProvideSessionStore, wire.Bind(new(session.EventStore), new(*redis.EventStoreImpl)), ProvideSessionEventStore, wire.Bind(new(session.Provider), new(*session.ProviderImpl)), ProvideSessionProvider, wire.Bind(new(db.Context), new(*db.ContextImpl)), wire.Bind(new(db.TxContext), new(*db.ContextImpl)), wire.Bind(new(db.SafeTxContext), new(*db.ContextImpl)), db.NewContextImpl, wire.Bind(new(authinfo.Store), new(*pq.StoreImpl)), pq.NewAuthInfoStore, wire.Bind(new(userprofile.Store), new(*userprofile.StoreImpl)), userprofile.NewUserProfileStore, wire.Bind(new(password.Store), new(*password.StoreImpl)), password.NewStore, wire.Bind(new(passwordhistory.Store), new(*passwordhistory.StoreImpl)), passwordhistory.NewPasswordHistoryStore, ProvideAuditTrail, wire.Bind(new(sms.Client), new(*sms.ClientImpl)), ProvideSMSClient, wire.Bind(new(mail.Sender), new(*mail.SenderImpl)), ProvideMailSender, wire.Bind(new(mfa.Sender), new(*mfa.SenderImpl)), mfa.NewSender, wire.Bind(new(mfa.Store), new(*mfa.StoreImpl)), ProvideMFAStore, wire.Bind(new(mfa.Provider), new(*mfa.ProviderImpl)), ProvideMFAProvider, wire.Bind(new(hook.Store), new(*hook.StoreImpl)), hook.NewStore, wire.Bind(new(hook.Mutator), new(*hook.MutatorImpl)), ProvideHookMutator, wire.Bind(new(hook.Deliverer), new(*hook.DelivererImpl)), hook.NewDeliverer, wire.Bind(new(hook.Provider), new(*hook.ProviderImpl)), ProvideHookProvider, wire.Bind(new(password.Provider), new(*password.ProviderImpl)), ProvidePasswordAuthProvider, wire.Bind(new(customtoken.Provider), new(*customtoken.ProviderImpl)), ProvideCustomTokenProvider, wire.Bind(new(oauth.Provider), new(*oauth.ProviderImpl)), oauth.NewProvider, wire.Bind(new(principal.IdentityProvider), new(*principal.IdentityProviderImpl)), ProvideIdentityProvider, wire.Bind(new(modelprovider.Provider), new(*modelprovider.ProviderImpl)), modelprovider.NewProvider, wire.Bind(new(provider.AuthenticationProvider), new(*provider.AuthenticationProviderImpl)), provider.NewAuthenticationProvider,
+	ProvideSQLExecutor, template.NewEngine, urlprefix.NewProvider, wire.Bind(new(time.Provider), new(time.ProviderImpl)), time.NewProvider, wire.Bind(new(provider.RenderProvider), new(*provider.RenderProviderImpl)), provider.NewRenderProvider, wire.Bind(new(provider.ValidateProvider), new(*provider.ValidateProviderImpl)), provider.NewValidateProvider, wire.Bind(new(auth.ContextGetter), new(*provider.AuthContextProviderImpl)), wire.Bind(new(provider.AuthContextProvider), new(*provider.AuthContextProviderImpl)), provider.NewAuthContextProvider, wire.Bind(new(logging.Factory), new(*logging.FactoryImpl)), ProvideLoggingFactory, wire.Bind(new(session.Store), new(*redis.StoreImpl)), ProvideSessionStore, wire.Bind(new(session.EventStore), new(*redis.EventStoreImpl)), ProvideSessionEventStore, wire.Bind(new(session.Provider), new(*session.ProviderImpl)), ProvideSessionProvider, wire.Bind(new(db.Context), new(*db.ContextImpl)), wire.Bind(new(db.TxContext), new(*db.ContextImpl)), wire.Bind(new(db.SafeTxContext), new(*db.ContextImpl)), db.NewContextImpl, wire.Bind(new(authinfo.Store), new(*pq.StoreImpl)), pq.NewAuthInfoStore, wire.Bind(new(userprofile.Store), new(*userprofile.StoreImpl)), userprofile.NewUserProfileStore, wire.Bind(new(password.Store), new(*password.StoreImpl)), password.NewStore, wire.Bind(new(passwordhistory.Store), new(*passwordhistory.StoreImpl)), passwordhistory.NewPasswordHistoryStore, ProvideAuditTrail, wire.Bind(new(sms.Client), new(*sms.ClientImpl)), ProvideSMSClient, wire.Bind(new(mail.Sender), new(*mail.SenderImpl)), ProvideMailSender, wire.Bind(new(mfa.Sender), new(*mfa.SenderImpl)), mfa.NewSender, wire.Bind(new(mfa.Store), new(*mfa.StoreImpl)), ProvideMFAStore, wire.Bind(new(mfa.Provider), new(*mfa.ProviderImpl)), ProvideMFAProvider, wire.Bind(new(hook.Store), new(*hook.StoreImpl)), hook.NewStore, wire.Bind(new(hook.Mutator), new(*hook.MutatorImpl)), ProvideHookMutator, wire.Bind(new(hook.Deliverer), new(*hook.DelivererImpl)), hook.NewDeliverer, wire.Bind(new(hook.Provider), new(*hook.ProviderImpl)), ProvideHookProvider, wire.Bind(new(password.Provider), new(*password.ProviderImpl)), ProvidePasswordAuthProvider, wire.Bind(new(customtoken.Provider), new(*customtoken.ProviderImpl)), ProvideCustomTokenProvider, wire.Bind(new(oauth.Provider), new(*oauth.ProviderImpl)), oauth.NewProvider, wire.Bind(new(principal.IdentityProvider), new(*principal.IdentityProviderImpl)), ProvideIdentityProvider, wire.Bind(new(modelprovider.Provider), new(*modelprovider.ProviderImpl)), modelprovider.NewProvider, wire.Bind(new(authorizationcode.Store), new(*authorizationcode.RedisStore)), ProvideAuthorizationCodeStore, wire.Bind(new(provider.AuthenticationProvider), new(*provider.AuthenticationProviderImpl)), provider.NewAuthenticationProvider,
 )
