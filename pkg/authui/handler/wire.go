@@ -271,6 +271,16 @@ func ProvideAuthorizationCodeStore(
 	return authorizationcode.NewRedisStore(context, tConfig, timeProvider, AuthorizationCodeKey)
 }
 
+func ProvideAuthInfoStore(
+	tConfig *config.TenantConfiguration,
+	sqlExecutor db.SQLExecutor,
+) *authinfopq.StoreImpl {
+	return authinfopq.NewAuthInfoStore(
+		db.NewSQLBuilder("core", tConfig.DatabaseConfig.DatabaseSchema, tConfig.AppID),
+		sqlExecutor,
+	)
+}
+
 var DefaultSet = wire.NewSet(
 	ProvideTenantConfig,
 	ProvideTenantConfigPtr,
@@ -316,7 +326,7 @@ var DefaultSet = wire.NewSet(
 	db.NewContextImpl,
 
 	wire.Bind(new(authinfo.Store), new(*authinfopq.StoreImpl)),
-	authinfopq.NewAuthInfoStore,
+	ProvideAuthInfoStore,
 
 	wire.Bind(new(userprofile.Store), new(*userprofile.StoreImpl)),
 	userprofile.NewUserProfileStore,
