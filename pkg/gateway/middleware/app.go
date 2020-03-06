@@ -27,9 +27,7 @@ func (f FindAppMiddleware) Handle(next http.Handler) http.Handler {
 		host := r.Host
 		app := gatewayModel.App{}
 		if err := f.Store.GetAppByDomain(host, &app); err != nil {
-			if !store.IsNotFound(err) {
-				logger.WithError(err).Error("failed to find app")
-			}
+			logger.WithError(err).Error("failed to find app")
 			http.Error(w, "App not found", http.StatusBadRequest)
 			return
 		}
