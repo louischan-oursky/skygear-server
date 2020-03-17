@@ -7,6 +7,7 @@ package auth
 
 import (
 	"github.com/gorilla/mux"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/webapp"
 	"github.com/skygeario/skygear-server/pkg/core/auth"
 	"net/http"
 )
@@ -17,5 +18,12 @@ func NewAccessKeyMiddleware(r *http.Request, m DependencyMap) mux.MiddlewareFunc
 	context := ProvideContext(r)
 	tenantConfiguration := ProvideTenantConfig(context)
 	middlewareFunc := auth.ProvideAccessKeyMiddleware(tenantConfiguration)
+	return middlewareFunc
+}
+
+func NewCSPMiddleware(r *http.Request, m DependencyMap) mux.MiddlewareFunc {
+	context := ProvideContext(r)
+	tenantConfiguration := ProvideTenantConfig(context)
+	middlewareFunc := webapp.ProvideCSPMiddleware(tenantConfiguration)
 	return middlewareFunc
 }
