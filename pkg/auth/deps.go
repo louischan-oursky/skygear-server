@@ -9,11 +9,14 @@ import (
 
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/session"
 	sessionredis "github.com/skygeario/skygear-server/pkg/auth/dependency/session/redis"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/webapp"
+	"github.com/skygeario/skygear-server/pkg/auth/template"
 	authinfopq "github.com/skygeario/skygear-server/pkg/core/auth/authinfo/pq"
 	"github.com/skygeario/skygear-server/pkg/core/config"
 	"github.com/skygeario/skygear-server/pkg/core/db"
 	corehttp "github.com/skygeario/skygear-server/pkg/core/http"
 	"github.com/skygeario/skygear-server/pkg/core/logging"
+	coretemplate "github.com/skygeario/skygear-server/pkg/core/template"
 	"github.com/skygeario/skygear-server/pkg/core/time"
 )
 
@@ -54,10 +57,30 @@ func ProvideAuthSQLBuilder(f db.SQLBuilderFactory) db.SQLBuilder {
 	return f("auth")
 }
 
+// ProvideWebAppRenderProvider is placed here because it requires DependencyMap.
+func ProvideWebAppRenderProvider(m DependencyMap, config *config.TenantConfiguration, templateEngine *coretemplate.Engine) webapp.RenderProvider {
+	return &webapp.RenderProviderImpl{
+		StaticAssetURLPrefix: m.StaticAssetURLPrefix,
+		AuthConfiguration:    config.AppConfig.Auth,
+		AuthUIConfiguration:  config.AppConfig.AuthUI,
+		TemplateEngine:       templateEngine,
+	}
+}
+
+func ProvideTemplateEngine(config *config.TenantConfiguration, m DependencyMap) *coretemplate.Engine {
+	return template.NewEngineWithConfig(
+		*config,
+		m.EnableFileSystemTemplate,
+		m.AssetGearLoader,
+	)
+}
+
 var DependencySet = wire.NewSet(
 	ProvideContext,
 	ProvideTenantConfig,
 	ProvideInsecureCookieConfig,
+	ProvideTemplateEngine,
+	ProvideWebAppRenderProvider,
 
 	ProvideLoggingRequestID,
 	ProvideAuthSQLBuilder,
@@ -68,4 +91,5 @@ var DependencySet = wire.NewSet(
 	authinfopq.DependencySet,
 	session.DependencySet,
 	sessionredis.DependencySet,
+	webapp.DependencySet,
 )
