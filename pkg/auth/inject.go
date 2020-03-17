@@ -48,6 +48,7 @@ type DependencyMap struct {
 	AssetGearLoader          *template.AssetGearLoader
 	AsyncTaskExecutor        *async.Executor
 	UseInsecureCookie        bool
+	StaticAssetURLPrefix     string
 	DefaultConfiguration     config.DefaultConfiguration
 	ReservedNameChecker      *loginid.ReservedNameChecker
 }
