@@ -11,13 +11,25 @@ import (
 
 type IdentityProvider interface {
 	Get(userID string, typ authn.IdentityType, id string) (*IdentityInfo, error)
+	// GetByClaims return user ID and information about the identity the matches the provided skygear claims.
 	GetByClaims(typ authn.IdentityType, claims map[string]interface{}) (string, *IdentityInfo, error)
+	// ListByClaims return list of identities the matches the provided OIDC standard claims.
+	ListByClaims(claims map[string]string) ([]*IdentityInfo, error)
+	New(userID string, typ authn.IdentityType, claims map[string]interface{}) *IdentityInfo
+	CreateAll(userID string, is []*IdentityInfo) error
+	Validate(is []*IdentityInfo) error
 }
 
 type AuthenticatorProvider interface {
-	Get(userID string, typ AuthenticatorType, id string) (*AuthenticatorInfo, error)
-	List(userID string, typ AuthenticatorType) ([]*AuthenticatorInfo, error)
+	Get(userID string, typ authn.AuthenticatorType, id string) (*AuthenticatorInfo, error)
+	List(userID string, typ authn.AuthenticatorType) ([]*AuthenticatorInfo, error)
+	New(userID string, spec AuthenticatorSpec, secret string) ([]*AuthenticatorInfo, error)
+	CreateAll(userID string, ais []*AuthenticatorInfo) error
 	Authenticate(userID string, spec AuthenticatorSpec, state *map[string]string, secret string) (*AuthenticatorInfo, error)
+}
+
+type UserProvider interface {
+	Create(userID string, metadata map[string]interface{}, identities []*IdentityInfo) error
 }
 
 // TODO(interaction): configurable lifetime
@@ -29,6 +41,7 @@ type Provider struct {
 	Logger        *logrus.Entry
 	Identity      IdentityProvider
 	Authenticator AuthenticatorProvider
+	User          UserProvider
 	Config        *config.AuthenticationConfiguration
 }
 
@@ -36,25 +49,6 @@ func (p *Provider) GetInteraction(token string) (*Interaction, error) {
 	i, err := p.Store.Get(token)
 	if err != nil {
 		return nil, err
-	}
-
-	if i.Identity != nil && !i.IsNewIdentity(i.Identity.ID) {
-		if i.Identity, err = p.Identity.Get(
-			i.UserID, i.Identity.Type, i.Identity.ID); err != nil {
-			return nil, err
-		}
-	}
-	if i.PrimaryAuthenticator != nil && !i.IsNewAuthenticator(i.PrimaryAuthenticator.ID) {
-		if i.PrimaryAuthenticator, err = p.Authenticator.Get(
-			i.UserID, i.PrimaryAuthenticator.Type, i.PrimaryAuthenticator.ID); err != nil {
-			return nil, err
-		}
-	}
-	if i.SecondaryAuthenticator != nil && !i.IsNewAuthenticator(i.SecondaryAuthenticator.ID) {
-		if i.SecondaryAuthenticator, err = p.Authenticator.Get(
-			i.UserID, i.SecondaryAuthenticator.Type, i.SecondaryAuthenticator.ID); err != nil {
-			return nil, err
-		}
 	}
 
 	return i, nil
@@ -75,21 +69,4 @@ func (p *Provider) SaveInteraction(i *Interaction) (string, error) {
 		}
 	}
 	return i.Token, nil
-}
-
-func (p *Provider) Commit(i *Interaction) (*authn.Attrs, error) {
-	// TODO(interaction): create new identities & authenticators
-
-	err := p.Store.Delete(i)
-	if err != nil {
-		p.Logger.WithError(err).Warn("failed to cleanup interaction")
-	}
-
-	attrs := &authn.Attrs{
-		UserID:         i.UserID,
-		IdentityType:   i.Identity.Type,
-		IdentityClaims: i.Identity.Claims,
-		// TODO(interaction): populate acr & amr
-	}
-	return attrs, nil
 }

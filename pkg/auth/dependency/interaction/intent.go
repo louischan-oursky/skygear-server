@@ -1,5 +1,7 @@
 package interaction
 
+import "github.com/skygeario/skygear-server/pkg/auth/model"
+
 // Intent represents the intention that triggered the interaction.
 type Intent interface {
 	Type() IntentType
@@ -38,14 +40,16 @@ func NewIntent(t IntentType) Intent {
 }
 
 type IntentSignup struct {
-	UserMetadata map[string]interface{} `json:"user_metadata"`
-	Identity     IdentitySpec           `json:"identity"`
+	UserMetadata    map[string]interface{} `json:"user_metadata"`
+	Identity        IdentitySpec           `json:"identity"`
+	OnUserDuplicate model.OnUserDuplicate  `json:"on_user_duplicate"`
 }
 
 func (*IntentSignup) Type() IntentType { return IntentTypeSignup }
 
 type IntentLogin struct {
-	Identity IdentitySpec `json:"identity"`
+	Identity           IdentitySpec `json:"identity"`
+	OriginalIntentType IntentType   `json:"original_intent_type,omitempty"`
 }
 
 func (*IntentLogin) Type() IntentType { return IntentTypeLogin }

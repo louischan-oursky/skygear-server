@@ -11,6 +11,8 @@ func (p *Provider) GetInteractionState(i *Interaction) (*State, error) {
 	switch intent := i.Intent.(type) {
 	case *IntentLogin:
 		return p.getStateLogin(i, intent)
+	case *IntentSignup:
+		return p.getStateSignup(i, intent)
 	}
 	panic(fmt.Sprintf("interaction: unknown intent type %T", i.Intent))
 }
@@ -67,18 +69,42 @@ func (p *Provider) getStateLogin(i *Interaction, intent *IntentLogin) (*State, e
 	return s, nil
 }
 
-var identityPrimaryAuthenticators = map[authn.IdentityType]map[AuthenticatorType]bool{
+func (p *Provider) getStateSignup(i *Interaction, intent *IntentSignup) (*State, error) {
+	primaryAuthenticators := p.getAvailablePrimaryAuthenticators(intent.Identity.Type)
+	s := &State{}
+
+	// Setup primary authenticator
+	needPrimaryAuthn := false
+	if len(primaryAuthenticators) > 0 {
+		s.Steps = []StepState{
+			{
+				Step:                    StepSetupPrimaryAuthenticator,
+				AvailableAuthenticators: primaryAuthenticators,
+			},
+		}
+		needPrimaryAuthn = true
+	}
+	if needPrimaryAuthn && i.PrimaryAuthenticator == nil {
+		return s, nil
+	}
+
+	// Commit
+	s.Steps = append(s.Steps, StepState{Step: StepCommit})
+	return s, nil
+}
+
+var identityPrimaryAuthenticators = map[authn.IdentityType]map[authn.AuthenticatorType]bool{
 	authn.IdentityTypeLoginID: {
-		AuthenticatorTypePassword: true,
-		AuthenticatorTypeTOTP:     true,
-		AuthenticatorTypeOOBOTP:   true,
+		authn.AuthenticatorTypePassword: true,
+		authn.AuthenticatorTypeTOTP:     true,
+		authn.AuthenticatorTypeOOB:      true,
 	},
 }
 
 func (p *Provider) getAvailablePrimaryAuthenticators(typ authn.IdentityType) []AuthenticatorSpec {
 	var as []AuthenticatorSpec
 	for _, t := range p.Config.PrimaryAuthenticators {
-		authenticatorType := AuthenticatorType(t)
+		authenticatorType := authn.AuthenticatorType(t)
 		if !identityPrimaryAuthenticators[typ][authenticatorType] {
 			continue
 		}
@@ -90,7 +116,7 @@ func (p *Provider) getAvailablePrimaryAuthenticators(typ authn.IdentityType) []A
 func (p *Provider) getAvailableSecondaryAuthenticators() []AuthenticatorSpec {
 	var as []AuthenticatorSpec
 	for _, t := range p.Config.SecondaryAuthenticators {
-		as = append(as, AuthenticatorSpec{Type: AuthenticatorType(t), Props: map[string]interface{}{}})
+		as = append(as, AuthenticatorSpec{Type: authn.AuthenticatorType(t), Props: map[string]interface{}{}})
 	}
 	return as
 }
@@ -98,7 +124,7 @@ func (p *Provider) getAvailableSecondaryAuthenticators() []AuthenticatorSpec {
 func (p *Provider) listSecondaryAuthenticators(userID string) ([]AuthenticatorSpec, error) {
 	var as []AuthenticatorSpec
 	for _, t := range p.Config.SecondaryAuthenticators {
-		ais, err := p.Authenticator.List(userID, AuthenticatorType(t))
+		ais, err := p.Authenticator.List(userID, authn.AuthenticatorType(t))
 		if err != nil {
 			return nil, err
 		}

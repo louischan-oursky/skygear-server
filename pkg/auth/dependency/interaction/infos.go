@@ -10,7 +10,11 @@ type IdentityInfo struct {
 }
 
 func (i *IdentityInfo) ToSpec() IdentitySpec {
-	return IdentitySpec{ID: i.ID, Type: i.Type, Claims: i.Claims}
+	return IdentitySpec{Type: i.Type, Claims: i.Claims}
+}
+
+func (i *IdentityInfo) ToRef() IdentityRef {
+	return IdentityRef{ID: i.ID, Type: i.Type}
 }
 
 const (
@@ -20,9 +24,13 @@ const (
 	IdentityClaimOAuthSubjectID string = "https://auth.skygear.io/claims/oauth/subject_id"
 	// IdentityClaimOAuthData is a claim with a map value containing raw OAuth provider profile.
 	IdentityClaimOAuthProfile string = "https://auth.skygear.io/claims/oauth/profile"
+	// IdentityClaimOAuthData is a claim with a map value containing mapped OIDC claims.
+	IdentityClaimOAuthClaims string = "https://auth.skygear.io/claims/oauth/claims"
 
 	// IdentityClaimLoginIDValue is a claim with a string value indicating the key of login ID.
 	IdentityClaimLoginIDKey string = "https://auth.skygear.io/claims/login_id/key"
+	// IdentityClaimLoginIDOriginalValue is a claim with a string value indicating the value of original login ID.
+	IdentityClaimLoginIDOriginalValue string = "https://auth.skygear.io/claims/login_id/original_value"
 	// IdentityClaimLoginIDValue is a claim with a string value indicating the value of login ID.
 	IdentityClaimLoginIDValue string = "https://auth.skygear.io/claims/login_id/value"
 	// IdentityClaimLoginIDUniqueKey is a claim with a string value containing the unique normalized login ID.
@@ -30,28 +38,25 @@ const (
 )
 
 type AuthenticatorInfo struct {
-	ID            string                 `json:"id"`
-	Type          AuthenticatorType      `json:"type"`
-	Secret        string                 `json:"secret"`
-	Props         map[string]interface{} `json:"props"`
-	Authenticator interface{}            `json:"-"`
+	ID            string                  `json:"id"`
+	Type          authn.AuthenticatorType `json:"type"`
+	Secret        string                  `json:"secret"`
+	Props         map[string]interface{}  `json:"props"`
+	Authenticator interface{}             `json:"-"`
 }
 
 func (i *AuthenticatorInfo) ToSpec() AuthenticatorSpec {
-	return AuthenticatorSpec{ID: i.ID, Type: i.Type, Props: i.Props}
+	return AuthenticatorSpec{Type: i.Type, Props: i.Props}
 }
 
-type AuthenticatorType string
+func (i *AuthenticatorInfo) ToRef() AuthenticatorRef {
+	return AuthenticatorRef{ID: i.ID, Type: i.Type}
+}
 
 const (
-	AuthenticatorTypePassword     AuthenticatorType = "password"
-	AuthenticatorTypeTOTP         AuthenticatorType = "totp"
-	AuthenticatorTypeOOBOTP       AuthenticatorType = "oob_otp"
-	AuthenticatorTypeBearerToken  AuthenticatorType = "bearer_token"
-	AuthenticatorTypeRecoveryCode AuthenticatorType = "recovery_code"
-)
+	// AuthenticatorPropCreatedAt is the creation time of the authenticator
+	AuthenticatorPropCreatedAt string = "https://auth.skygear.io/claims/authenticators/created_at"
 
-const (
 	// AuthenticatorPropTOTPDisplayName is a claim with string value for TOTP display name.
 	AuthenticatorPropTOTPDisplayName string = "https://auth.skygear.io/claims/totp/display_name"
 
@@ -61,6 +66,10 @@ const (
 	AuthenticatorPropOOBOTPEmail string = "https://auth.skygear.io/claims/oob_otp/email"
 	// AuthenticatorPropOOBOTPPhone is a claim with string value for OOB OTP phone channel.
 	AuthenticatorPropOOBOTPPhone string = "https://auth.skygear.io/claims/oob_otp/phone"
+
+	// AuthenticatorPropBearerTokenParentID is a claim with string value for bearer token parent authenticator.
+	// nolint:gosec
+	AuthenticatorPropBearerTokenParentID string = "https://auth.skygear.io/claims/bearer_token/parent_id"
 
 	// AuthenticatorStateOOBOTPCode is a claim with string value for OOB authenticator ID of current interaction.
 	AuthenticatorStateOOBOTPID string = "https://auth.skygear.io/claims/oob_otp/id"
