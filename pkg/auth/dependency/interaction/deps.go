@@ -19,6 +19,7 @@ func ProvideProvider(
 	ip IdentityProvider,
 	ap AuthenticatorProvider,
 	up UserProvider,
+	oob OOBProvider,
 	c *config.TenantConfiguration,
 ) *Provider {
 	return &Provider{
@@ -28,6 +29,7 @@ func ProvideProvider(
 		Identity:      ip,
 		Authenticator: ap,
 		User:          up,
+		OOB:           oob,
 		Config:        c.AppConfig.Authentication,
 	}
 }

@@ -3,8 +3,11 @@ package interaction
 import (
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/oob"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/identity"
+	"github.com/skygeario/skygear-server/pkg/core/authn"
 	"github.com/skygeario/skygear-server/pkg/core/skyerr"
 )
 
@@ -58,7 +61,11 @@ func (p *Provider) performActionLogin(i *Interaction, intent *IntentLogin, step 
 			return nil
 
 		case *ActionTriggerOOBAuthenticator:
-			// TODO(interaction): handle OOB trigger
+			err := p.doTriggerOOB(i, action)
+			if err != nil {
+				return err
+			}
+			return nil
 		default:
 			panic(fmt.Sprintf("interaction_login: unhandled authenticate action %T", action))
 		}
@@ -92,7 +99,11 @@ func (p *Provider) performActionSignup(i *Interaction, intent *IntentSignup, ste
 			return nil
 
 		case *ActionTriggerOOBAuthenticator:
-			// TODO(interaction): handle OOB trigger
+			err := p.doTriggerOOB(i, action)
+			if err != nil {
+				return err
+			}
+			return nil
 		default:
 			panic(fmt.Sprintf("interaction_signup: unhandled authenticate action %T", action))
 		}
@@ -134,7 +145,20 @@ func (p *Provider) setupAuthenticator(i *Interaction, step *StepState, astate *m
 		return nil, ErrInvalidAction
 	}
 
-	// TODO(interaction): special handling for OTP
+	switch as.Type {
+	case authn.AuthenticatorTypePassword:
+		// Nothing special needs to be done
+		break
+	case authn.AuthenticatorTypeOOB:
+		// Ignoring the first return value because it is always nil.
+		_, err := p.Authenticator.Authenticate(i.UserID, as, astate, secret)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		panic("interaction_signup: setup up unexpected authenticator type: " + as.Type)
+	}
+
 	ais, err := p.Authenticator.New(i.UserID, as, secret)
 	if err != nil {
 		return nil, err
@@ -142,4 +166,89 @@ func (p *Provider) setupAuthenticator(i *Interaction, step *StepState, astate *m
 	i.NewAuthenticators = append(i.NewAuthenticators, ais...)
 	i.State = nil
 	return ais[0], nil
+}
+
+func (p *Provider) doTriggerOOB(i *Interaction, action *ActionTriggerOOBAuthenticator) (err error) {
+	spec := action.Authenticator
+
+	if spec.Type != authn.AuthenticatorTypeOOB {
+		panic("interaction: unexpected ActionTriggerOOBAuthenticator.Authenticator.Type: " + spec.Type)
+	}
+
+	now := p.Time.NowUTC()
+	nowBytes, err := now.MarshalText()
+	if err != nil {
+		return
+	}
+	nowStr := string(nowBytes)
+
+	if i.State == nil {
+		i.State = map[string]string{}
+	}
+
+	// Rotate the code according to oob.OOBCodeValidDuration
+	code := i.State[AuthenticatorStateOOBOTPCode]
+	generateTimeStr := i.State[AuthenticatorStateOOBOTPGenerateTime]
+	if generateTimeStr == "" {
+		code = p.OOB.GenerateCode()
+		generateTimeStr = nowStr
+	} else {
+		var tt time.Time
+		err = tt.UnmarshalText([]byte(generateTimeStr))
+		if err != nil {
+			return
+		}
+
+		// Expire
+		if tt.Add(oob.OOBCodeValidDuration).Before(now) {
+			code = p.OOB.GenerateCode()
+			generateTimeStr = nowStr
+		}
+	}
+
+	// Respect cooldown
+	triggerTimeStr := i.State[AuthenticatorStateOOBOTPTriggerTime]
+	if triggerTimeStr != "" {
+		var tt time.Time
+		err = tt.UnmarshalText([]byte(triggerTimeStr))
+		if err != nil {
+			return
+		}
+
+		if tt.Add(oob.OOBCodeSendCooldownSeconds * time.Second).After(now) {
+			err = ErrOOBOTPCooldown
+			return
+		}
+	}
+
+	opts := oob.SendCodeOptions{
+		Code: code,
+	}
+	if channel, ok := spec.Props[AuthenticatorPropOOBOTPChannelType].(string); ok {
+		opts.Channel = channel
+	}
+	if email, ok := spec.Props[AuthenticatorPropOOBOTPEmail].(string); ok {
+		opts.Email = email
+	}
+	if phone, ok := spec.Props[AuthenticatorPropOOBOTPPhone].(string); ok {
+		opts.Phone = phone
+	}
+
+	err = p.OOB.SendCode(opts)
+	if err != nil {
+		return
+	}
+
+	// Perform mutation on interaction at the end.
+
+	// This function can be called by login or signup.
+	// In case of signup, the spec does not have an ID yet.
+	if id, ok := spec.Props[AuthenticatorPropOOBOTPID].(string); ok {
+		i.State[AuthenticatorStateOOBOTPID] = id
+	}
+	i.State[AuthenticatorStateOOBOTPCode] = code
+	i.State[AuthenticatorStateOOBOTPGenerateTime] = generateTimeStr
+	i.State[AuthenticatorStateOOBOTPTriggerTime] = nowStr
+
+	return
 }

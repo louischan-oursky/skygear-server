@@ -4,6 +4,8 @@ import (
 	gotime "time"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/oob"
 	"github.com/skygeario/skygear-server/pkg/core/authn"
 	"github.com/skygeario/skygear-server/pkg/core/config"
 	"github.com/skygeario/skygear-server/pkg/core/time"
@@ -18,11 +20,27 @@ type IdentityProvider interface {
 	New(userID string, typ authn.IdentityType, claims map[string]interface{}) *IdentityInfo
 	CreateAll(userID string, is []*IdentityInfo) error
 	Validate(is []*IdentityInfo) error
+	// RelateIdentityToAuthenticator tells if authenticatorSpec is compatible with and related to identitySpec.
+	//
+	// A authenticatorSpec is compatible with identitySpec if authenticator can be used as authentication for the identity.
+	// For example, OAuth identity is incompatible with any authenticator because the identity itself implicit authenticates.
+	// For example, login ID identity of login ID type username is incompatible with OOB OTP authenticator because
+	// OOB OTP authenticator requires email or phone.
+	//
+	// If authenticatorSpec is incompatible with identitySpec, nil is returned.
+	//
+	// Otherwise authenticatorSpec is further checked if it is related to identitySpec.
+	// If authenticatorSpec is related to identitySpec, authenticatorSpec.Props is mutated in-place.
+	// Currently on the following case mutation would occur.
+	//
+	//   - login ID identity of login ID type email or phone and OOB OTP authenticator.
+	RelateIdentityToAuthenticator(identitySpec IdentitySpec, authenticatorSpec *AuthenticatorSpec) *AuthenticatorSpec
 }
 
 type AuthenticatorProvider interface {
 	Get(userID string, typ authn.AuthenticatorType, id string) (*AuthenticatorInfo, error)
 	List(userID string, typ authn.AuthenticatorType) ([]*AuthenticatorInfo, error)
+	ListByIdentity(userID string, ii *IdentityInfo) ([]*AuthenticatorInfo, error)
 	New(userID string, spec AuthenticatorSpec, secret string) ([]*AuthenticatorInfo, error)
 	CreateAll(userID string, ais []*AuthenticatorInfo) error
 	Authenticate(userID string, spec AuthenticatorSpec, state *map[string]string, secret string) (*AuthenticatorInfo, error)
@@ -30,6 +48,11 @@ type AuthenticatorProvider interface {
 
 type UserProvider interface {
 	Create(userID string, metadata map[string]interface{}, identities []*IdentityInfo) error
+}
+
+type OOBProvider interface {
+	GenerateCode() string
+	SendCode(opts oob.SendCodeOptions) error
 }
 
 // TODO(interaction): configurable lifetime
@@ -42,6 +65,7 @@ type Provider struct {
 	Identity      IdentityProvider
 	Authenticator AuthenticatorProvider
 	User          UserProvider
+	OOB           OOBProvider
 	Config        *config.AuthenticationConfiguration
 }
 

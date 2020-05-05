@@ -34,7 +34,7 @@ type OOBOTPAuthenticatorProvider interface {
 	List(userID string) ([]*oob.Authenticator, error)
 	New(userID string, channel authn.AuthenticatorOOBChannel, phone string, email string) *oob.Authenticator
 	Create(*oob.Authenticator) error
-	Authenticate(a *oob.Authenticator, expectedCode string, code string) error
+	Authenticate(expectedCode string, code string) error
 }
 
 type BearerTokenAuthenticatorProvider interface {
@@ -155,6 +155,52 @@ func (a *AuthenticatorAdaptor) List(userID string, typ authn.AuthenticatorType) 
 		panic("interaction_adaptors: unknown authenticator type " + typ)
 	}
 	return ais, nil
+}
+
+func (a *AuthenticatorAdaptor) ListByIdentity(userID string, ii *interaction.IdentityInfo) (ais []*interaction.AuthenticatorInfo, err error) {
+	// This function takes IdentityInfo instead of IdentitySpec because
+	// The login ID value in IdentityInfo is normalized.
+	switch ii.Type {
+	case authn.IdentityTypeOAuth:
+		// OAuth Identity does not have associated authenticators.
+		return
+	case authn.IdentityTypeLoginID:
+		// Login ID Identity has password, TOTP and OOB OTP.
+		// Note that we only return OOB OTP associated with the login ID.
+		var pas []*password.Authenticator
+		pas, err = a.Password.List(userID)
+		if err != nil {
+			return
+		}
+		for _, pa := range pas {
+			ais = append(ais, passwordToAuthenticatorInfo(pa))
+		}
+
+		var tas []*totp.Authenticator
+		tas, err = a.TOTP.List(userID)
+		if err != nil {
+			return
+		}
+		for _, ta := range tas {
+			ais = append(ais, totpToAuthenticatorInfo(ta))
+		}
+
+		loginID := ii.Claims[interaction.IdentityClaimLoginIDValue]
+		var oas []*oob.Authenticator
+		oas, err = a.OOBOTP.List(userID)
+		if err != nil {
+			return
+		}
+		for _, oa := range oas {
+			if oa.Email == loginID || oa.Phone == loginID {
+				ais = append(ais, oobotpToAuthenticatorInfo(oa))
+			}
+		}
+	default:
+		panic("interaction_adaptors: unknown identity type " + ii.Type)
+	}
+
+	return
 }
 
 func (a *AuthenticatorAdaptor) New(userID string, spec interaction.AuthenticatorSpec, secret string) ([]*interaction.AuthenticatorInfo, error) {
@@ -282,18 +328,27 @@ func (a *AuthenticatorAdaptor) Authenticate(userID string, spec interaction.Auth
 		id := (*state)[interaction.AuthenticatorStateOOBOTPID]
 		code := (*state)[interaction.AuthenticatorStateOOBOTPCode]
 
-		o, err := a.OOBOTP.Get(userID, id)
-		if errors.Is(err, authenticator.ErrAuthenticatorNotFound) {
-			return nil, interaction.ErrInvalidCredentials
-		} else if err != nil {
-			return nil, err
+		var o *oob.Authenticator
+		// This function can be called by login or signup.
+		// In case of login, we must check if the authenticator belongs to the user.
+		if id != "" {
+			var err error
+			o, err = a.OOBOTP.Get(userID, id)
+			if errors.Is(err, authenticator.ErrAuthenticatorNotFound) {
+				return nil, interaction.ErrInvalidCredentials
+			} else if err != nil {
+				return nil, err
+			}
 		}
 
-		if a.OOBOTP.Authenticate(o, code, secret) != nil {
+		if a.OOBOTP.Authenticate(code, secret) != nil {
 			return nil, interaction.ErrInvalidCredentials
 		}
-		return oobotpToAuthenticatorInfo(o), nil
 
+		if o != nil {
+			return oobotpToAuthenticatorInfo(o), nil
+		}
+		return nil, nil
 	case authn.AuthenticatorTypeBearerToken:
 		b, err := a.BearerToken.GetByToken(userID, secret)
 		if errors.Is(err, authenticator.ErrAuthenticatorNotFound) {

@@ -16,6 +16,7 @@ const (
 	TemplateItemTypeAuthUISignupHTML        config.TemplateItemType = "auth_ui_signup.html"
 	// nolint: gosec
 	TemplateItemTypeAuthUISignupPasswordHTML config.TemplateItemType = "auth_ui_signup_password.html"
+	TemplateItemTypeAuthUIOOBOTPHTML         config.TemplateItemType = "auth_ui_oob_otp_html"
 	// nolint: gosec
 	TemplateItemTypeAuthUIForgotPasswordHTML config.TemplateItemType = "auth_ui_forgot_password.html"
 	// nolint: gosec
@@ -319,7 +320,7 @@ var TemplateAuthUILoginPasswordHTML = template.Spec{
 
 {{ template "auth_ui_header.html" . }}
 
-<form class="enter-password-form" method="post">
+<form class="simple-form enter-password-form" method="post">
 {{ $.csrfField }}
 
 <div class="nav-bar">
@@ -360,6 +361,66 @@ var TemplateAuthUILoginPasswordHTML = template.Spec{
 `,
 }
 
+var TemplateAuthUIOOBOTPHTML = template.Spec{
+	Type:        TemplateItemTypeAuthUIOOBOTPHTML,
+	IsHTML:      true,
+	Translation: TemplateItemTypeAuthUITranslationJSON,
+	Defines:     defines,
+	Components:  components,
+	Default: `<!DOCTYPE html>
+<html>
+{{ template "auth_ui_html_head.html" . }}
+<body class="page">
+<div class="content">
+
+{{ template "auth_ui_header.html" . }}
+
+<form class="simple-form oob-otp-form" method="post">
+{{ $.csrfField }}
+
+<div class="nav-bar">
+	<button class="btn back-btn" type="button" title="{{ localize "back-button-title" }}"></button>
+</div>
+
+{{ if eq .x_login_id_input_type "phone" }}
+<div class="title primary-txt">{{ localize "oob-otp-page-title--sms" }}</div>
+{{ end }}
+{{ if eq .x_login_id_input_type "text" }}
+<div class="title primary-txt">{{ localize "oob-otp-page-title--email" }}</div>
+{{ end }}
+
+{{ template "ERROR" . }}
+
+{{ if eq .x_login_id_input_type "phone" }}
+<div class="description primary-txt">{{ localize "oob-otp-description--sms" .x_oob_otp_code_length .x_calling_code .x_national_number }}</div>
+{{ end }}
+{{ if eq .x_login_id_input_type "text" }}
+<div class="description primary-txt">{{ localize "oob-otp-description--email" .x_oob_otp_code_length .x_login_id }}</div>
+{{ end }}
+
+<input type="hidden" name="x_calling_code" value="{{ .x_calling_code }}">
+<input type="hidden" name="x_national_number" value="{{ .x_national_number }}">
+<input type="hidden" name="x_login_id" value="{{ .x_login_id }}">
+<input type="hidden" name="x_interaction_token" value="{{ .x_interaction_token }}">
+
+<input class="input text-input primary-txt" type="text" name="x_password" placeholder="{{ localize "oob-otp-placeholder" }}" value="{{ .x_password }}">
+
+<button class="btn primary-btn align-self-flex-end" type="submit" name="submit" value="">{{ localize "confirm-oob-otp-button-label" }}</button>
+
+<div class="link">
+	<span class="primary-txt">{{ localize "oob-otp-resend-button-hint" }}</span>
+	<button id="resend-button" class="anchor" type="submit" name="trigger" value="true" data-cooldown="{{ .x_oob_otp_code_send_cooldown }}">{{ localize "oob-otp-resend-button-label" }}</button>
+</div>
+
+</form>
+{{ template "auth_ui_footer.html" . }}
+
+</div>
+</body>
+</html>
+`,
+}
+
 var TemplateAuthUIForgotPasswordHTML = template.Spec{
 	Type:        TemplateItemTypeAuthUIForgotPasswordHTML,
 	IsHTML:      true,
@@ -374,7 +435,7 @@ var TemplateAuthUIForgotPasswordHTML = template.Spec{
 
 {{ template "auth_ui_header.html" . }}
 
-<form class="forgot-password-form" method="post">
+<form class="simple-form forgot-password-form" method="post">
 {{ $.csrfField }}
 
 <div class="nav-bar">
@@ -443,7 +504,7 @@ var TemplateAuthUIForgotPasswordSuccessHTML = template.Spec{
 
 {{ template "auth_ui_header.html" . }}
 
-<div class="forgot-password-success">
+<div class="simple-form forgot-password-success">
 
 <div class="title primary-txt">{{ localize "forgot-password-success-page-title" }}</div>
 
@@ -476,7 +537,7 @@ var TemplateAuthUIResetPasswordHTML = template.Spec{
 
 {{ template "auth_ui_header.html" . }}
 
-<form class="reset-password-form" method="post">
+<form class="simple-form reset-password-form" method="post">
 {{ $.csrfField }}
 
 <div class="title primary-txt">{{ localize "reset-password-page-title" }}</div>
@@ -518,7 +579,7 @@ var TemplateAuthUIResetPasswordSuccessHTML = template.Spec{
 
 {{ template "auth_ui_header.html" . }}
 
-<div class="reset-password-success">
+<div class="simple-form reset-password-success">
 
 <div class="title primary-txt">{{ localize "reset-password-success-page-title" }}</div>
 
@@ -619,7 +680,7 @@ var TemplateAuthUISignupPasswordHTML = template.Spec{
 
 {{ template "auth_ui_header.html" . }}
 
-<form class="enter-password-form" method="post">
+<form class="simple-form enter-password-form" method="post">
 {{ $.csrfField }}
 <input type="hidden" name="x_login_id_key" value="{{ .x_login_id_key }}">
 <input type="hidden" name="x_calling_code" value="{{ .x_calling_code }}">
