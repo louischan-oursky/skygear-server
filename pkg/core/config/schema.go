@@ -477,7 +477,7 @@ var (
 			"id": { "type": "string" },
 			"type": {
 				"type": "string",
-				"enum": ["google", "facebook", "instagram", "linkedin", "azureadv2", "apple"]
+				"enum": ["google", "facebook", "linkedin", "azureadv2", "apple"]
 			},
 			"client_id": { "type": "string" },
 			"client_secret": { "type": "string" },
@@ -505,7 +505,7 @@ var (
 			},
 			{
 				"if": {
-					"properties": { "type": { "enum": ["google", "facebook", "instagram", "linkedin"] } }
+					"properties": { "type": { "enum": ["google", "facebook", "linkedin"] } }
 				},
 				"then": {
 					"required": ["client_id", "client_secret"]
