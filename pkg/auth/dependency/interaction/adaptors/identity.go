@@ -2,6 +2,7 @@ package adaptors
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/identity"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/identity/loginid"
@@ -13,6 +14,7 @@ import (
 
 type LoginIDIdentityProvider interface {
 	Get(userID, id string) (*loginid.Identity, error)
+	List(userID string) ([]*loginid.Identity, error)
 	GetByLoginID(loginID loginid.LoginID) ([]*loginid.Identity, error)
 	ListByClaim(name string, value string) ([]*loginid.Identity, error)
 	New(userID string, loginID loginid.LoginID) *loginid.Identity
@@ -23,7 +25,9 @@ type LoginIDIdentityProvider interface {
 
 type OAuthIdentityProvider interface {
 	Get(userID, id string) (*oauth.Identity, error)
+	List(userID string) ([]*oauth.Identity, error)
 	GetByProviderSubject(provider oauth.ProviderID, subjectID string) (*oauth.Identity, error)
+	GetByUserProvider(userID string, provider oauth.ProviderID) (*oauth.Identity, error)
 	ListByClaim(name string, value string) ([]*oauth.Identity, error)
 	New(
 		userID string,
@@ -111,6 +115,30 @@ func (a *IdentityAdaptor) ListByClaims(claims map[string]string) ([]*interaction
 	return all, nil
 }
 
+func (a *IdentityAdaptor) ListByUser(userID string) ([]*interaction.IdentityInfo, error) {
+	iis := []*interaction.IdentityInfo{}
+
+	// login id
+	lis, err := a.LoginID.List(userID)
+	if err != nil {
+		return nil, err
+	}
+	for _, i := range lis {
+		iis = append(iis, loginIDToIdentityInfo(i))
+	}
+
+	// oauth
+	ois, err := a.OAuth.List(userID)
+	if err != nil {
+		return nil, err
+	}
+	for _, i := range ois {
+		iis = append(iis, oauthToIdentityInfo(i))
+	}
+
+	return iis, nil
+}
+
 func (a *IdentityAdaptor) New(userID string, typ authn.IdentityType, claims map[string]interface{}) *interaction.IdentityInfo {
 	switch typ {
 	case authn.IdentityTypeLoginID:
@@ -194,10 +222,14 @@ func (a *IdentityAdaptor) UpdateAll(userID string, is []*interaction.IdentityInf
 
 func (a *IdentityAdaptor) Validate(is []*interaction.IdentityInfo) error {
 	var loginIDs []loginid.LoginID
+	var oauthProviderIDs []oauth.ProviderID
 	for _, i := range is {
 		if i.Type == authn.IdentityTypeLoginID {
 			loginID := extractLoginIDClaims(i.Claims)
 			loginIDs = append(loginIDs, loginID)
+		} else if i.Type == authn.IdentityTypeOAuth {
+			providerID, _ := extractOAuthClaims(i.Claims)
+			oauthProviderIDs = append(oauthProviderIDs, providerID)
 		}
 	}
 
@@ -205,6 +237,17 @@ func (a *IdentityAdaptor) Validate(is []*interaction.IdentityInfo) error {
 	if len(loginIDs) > 0 {
 		if err := a.LoginID.Validate(loginIDs); err != nil {
 			return err
+		}
+	}
+
+	// oauth identity check duplicate provider
+	if len(oauthProviderIDs) > 0 {
+		for i, l := range oauthProviderIDs {
+			for j, r := range oauthProviderIDs {
+				if i != j && reflect.DeepEqual(l, r) {
+					return identity.ErrIdentityAlreadyExists
+				}
+			}
 		}
 	}
 

@@ -99,6 +99,39 @@ func (p *Provider) NewInteractionSignup(intent *IntentSignup, clientID string) (
 	return i, nil
 }
 
+func (p *Provider) NewInteractionAddIdentity(intent *IntentAddIdentity, clientID string, userID string) (*Interaction, error) {
+	i := &Interaction{
+		Intent:   intent,
+		ClientID: clientID,
+		UserID:   userID,
+		State:    map[string]string{},
+	}
+	id := p.Identity.New(i.UserID, intent.Identity.Type, intent.Identity.Claims)
+	ir := id.ToRef()
+	i.Identity = &ir
+	i.NewIdentities = append(i.NewIdentities, id)
+
+	ois, err := p.Identity.ListByUser(userID)
+	if err != nil {
+		return nil, err
+	}
+	existingIdentities := []*IdentityInfo{}
+	for _, oi := range ois {
+		if oi.Type == id.Type {
+			existingIdentities = append(existingIdentities, oi)
+		}
+	}
+	checkIdentities := append(i.NewIdentities, existingIdentities...)
+
+	if err := p.Identity.Validate(checkIdentities); err != nil {
+		if errors.Is(err, identity.ErrIdentityAlreadyExists) {
+			return nil, ErrDuplicatedIdentity
+		}
+		return nil, err
+	}
+	return i, nil
+}
+
 func (p *Provider) NewInteractionAddAuthenticator(intent *IntentAddAuthenticator, clientID string, session auth.AuthSession) (*Interaction, error) {
 	panic("TODO(interaction): implement it")
 }

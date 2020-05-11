@@ -6,6 +6,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/oob"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/hook"
+	"github.com/skygeario/skygear-server/pkg/auth/model"
 	"github.com/skygeario/skygear-server/pkg/core/authn"
 	"github.com/skygeario/skygear-server/pkg/core/config"
 	"github.com/skygeario/skygear-server/pkg/core/time"
@@ -26,6 +28,7 @@ type IdentityProvider interface {
 	GetByClaims(typ authn.IdentityType, claims map[string]interface{}) (string, *IdentityInfo, error)
 	// ListByClaims return list of identities the matches the provided OIDC standard claims.
 	ListByClaims(claims map[string]string) ([]*IdentityInfo, error)
+	ListByUser(userID string) ([]*IdentityInfo, error)
 	New(userID string, typ authn.IdentityType, claims map[string]interface{}) *IdentityInfo
 	WithClaims(userID string, ii *IdentityInfo, claims map[string]interface{}) *IdentityInfo
 	CreateAll(userID string, is []*IdentityInfo) error
@@ -59,6 +62,7 @@ type AuthenticatorProvider interface {
 
 type UserProvider interface {
 	Create(userID string, metadata map[string]interface{}, identities []*IdentityInfo) error
+	Get(userID string) (*model.User, error)
 }
 
 type OOBProvider interface {
@@ -92,6 +96,7 @@ type Provider struct {
 	Authenticator AuthenticatorProvider
 	User          UserProvider
 	OOB           OOBProvider
+	Hooks         hook.Provider
 	Config        *config.AuthenticationConfiguration
 }
 

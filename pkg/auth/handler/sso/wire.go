@@ -8,7 +8,6 @@ import (
 	"github.com/google/wire"
 	"github.com/gorilla/mux"
 	pkg "github.com/skygeario/skygear-server/pkg/auth"
-	"github.com/skygeario/skygear-server/pkg/auth/dependency/authn"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/hook"
 	interactionflows "github.com/skygeario/skygear-server/pkg/auth/dependency/interaction/flows"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/principal/oauth"
@@ -36,7 +35,6 @@ func provideAuthHandler(
 	cfg *config.TenantConfiguration,
 	hp sso.AuthHandlerHTMLProvider,
 	sp sso.Provider,
-	ap AuthHandlerAuthnProvider,
 	op sso.OAuthProvider,
 	f OAuthHandlerInteractionFlow,
 ) http.Handler {
@@ -45,7 +43,6 @@ func provideAuthHandler(
 		TenantConfiguration:     cfg,
 		AuthHandlerHTMLProvider: hp,
 		SSOProvider:             sp,
-		AuthnProvider:           ap,
 		OAuthProvider:           op,
 		Interactions:            f,
 	}
@@ -55,8 +52,6 @@ func provideAuthHandler(
 func newAuthHandler(r *http.Request, m pkg.DependencyMap) http.Handler {
 	wire.Build(
 		pkg.DependencySet,
-		authn.ProvideAuthAPIProvider,
-		wire.Bind(new(AuthHandlerAuthnProvider), new(*authn.Provider)),
 		provideOAuthProviderFromRequestVars,
 		provideAuthHandler,
 		ProvideRedirectURIForAPIFunc,
@@ -68,17 +63,15 @@ func newAuthHandler(r *http.Request, m pkg.DependencyMap) http.Handler {
 func provideAuthResultHandler(
 	tx db.TxContext,
 	requireAuthz handler.RequireAuthz,
-	ap AuthResultAuthnProvider,
 	v *validation.Validator,
 	sp sso.Provider,
 	f OAuthResultInteractionFlow,
 ) http.Handler {
 	h := &AuthResultHandler{
-		TxContext:     tx,
-		AuthnProvider: ap,
-		Validator:     v,
-		SSOProvider:   sp,
-		Interactions:  f,
+		TxContext:    tx,
+		Validator:    v,
+		SSOProvider:  sp,
+		Interactions: f,
 	}
 	return requireAuthz(h, h)
 }
@@ -86,8 +79,6 @@ func provideAuthResultHandler(
 func newAuthResultHandler(r *http.Request, m pkg.DependencyMap) http.Handler {
 	wire.Build(
 		pkg.DependencySet,
-		authn.ProvideAuthAPIProvider,
-		wire.Bind(new(AuthResultAuthnProvider), new(*authn.Provider)),
 		provideAuthResultHandler,
 		wire.Bind(new(OAuthResultInteractionFlow), new(*interactionflows.AuthAPIFlow)),
 	)
@@ -99,15 +90,15 @@ func provideLinkHandler(
 	requireAuthz handler.RequireAuthz,
 	v *validation.Validator,
 	sp sso.Provider,
-	ap LinkAuthnProvider,
 	op sso.OAuthProvider,
+	f OAuthLinkInteractionFlow,
 ) http.Handler {
 	h := &LinkHandler{
 		TxContext:     tx,
 		Validator:     v,
 		SSOProvider:   sp,
-		AuthnProvider: ap,
 		OAuthProvider: op,
+		Interactions:  f,
 	}
 	return requireAuthz(h, h)
 }
@@ -115,11 +106,10 @@ func provideLinkHandler(
 func newLinkHandler(r *http.Request, m pkg.DependencyMap) http.Handler {
 	wire.Build(
 		pkg.DependencySet,
-		authn.ProvideAuthAPIProvider,
-		wire.Bind(new(LinkAuthnProvider), new(*authn.Provider)),
 		provideOAuthProviderFromRequestVars,
 		provideLinkHandler,
 		ProvideRedirectURIForAPIFunc,
+		wire.Bind(new(OAuthLinkInteractionFlow), new(*interactionflows.AuthAPIFlow)),
 	)
 	return nil
 }

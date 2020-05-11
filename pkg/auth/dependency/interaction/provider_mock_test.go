@@ -8,6 +8,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	oob "github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/oob"
 	interaction "github.com/skygeario/skygear-server/pkg/auth/dependency/interaction"
+	model "github.com/skygeario/skygear-server/pkg/auth/model"
 	authn "github.com/skygeario/skygear-server/pkg/core/authn"
 	reflect "reflect"
 )
@@ -159,6 +160,21 @@ func (m *MockIdentityProvider) ListByClaims(claims map[string]string) ([]*intera
 func (mr *MockIdentityProviderMockRecorder) ListByClaims(claims interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByClaims", reflect.TypeOf((*MockIdentityProvider)(nil).ListByClaims), claims)
+}
+
+// ListByUser mocks base method
+func (m *MockIdentityProvider) ListByUser(userID string) ([]*interaction.IdentityInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListByUser", userID)
+	ret0, _ := ret[0].([]*interaction.IdentityInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListByUser indicates an expected call of ListByUser
+func (mr *MockIdentityProviderMockRecorder) ListByUser(userID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListByUser", reflect.TypeOf((*MockIdentityProvider)(nil).ListByUser), userID)
 }
 
 // New mocks base method
@@ -392,6 +408,21 @@ func (m *MockUserProvider) Create(userID string, metadata map[string]interface{}
 func (mr *MockUserProviderMockRecorder) Create(userID, metadata, identities interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockUserProvider)(nil).Create), userID, metadata, identities)
+}
+
+// Get mocks base method
+func (m *MockUserProvider) Get(userID string) (*model.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", userID)
+	ret0, _ := ret[0].(*model.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get
+func (mr *MockUserProviderMockRecorder) Get(userID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockUserProvider)(nil).Get), userID)
 }
 
 // MockOOBProvider is a mock of OOBProvider interface
