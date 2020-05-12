@@ -16,8 +16,10 @@ import (
 	authenticatorrecoverycode "github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/recoverycode"
 	authenticatortotp "github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/totp"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/authn"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/challenge"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/forgotpassword"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/hook"
+	identityanonymous "github.com/skygeario/skygear-server/pkg/auth/dependency/identity/anonymous"
 	identityloginid "github.com/skygeario/skygear-server/pkg/auth/dependency/identity/loginid"
 	identityoauth "github.com/skygeario/skygear-server/pkg/auth/dependency/identity/oauth"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/interaction"
@@ -162,6 +164,7 @@ func ProvideCSRFMiddleware(m DependencyMap, tConfig *config.TenantConfiguration)
 var interactionDependencySet = wire.NewSet(
 	identityloginid.DependencySet,
 	identityoauth.DependencySet,
+	identityanonymous.DependencySet,
 	authenticatorpassword.DependencySet,
 	authenticatortotp.DependencySet,
 	authenticatoroob.DependencySet,
@@ -177,6 +180,7 @@ var interactionDependencySet = wire.NewSet(
 	wire.Bind(new(interaction.AuthenticatorProvider), new(*interactionadaptors.AuthenticatorAdaptor)),
 	wire.Bind(new(interactionadaptors.LoginIDIdentityProvider), new(*identityloginid.Provider)),
 	wire.Bind(new(interactionadaptors.OAuthIdentityProvider), new(*identityoauth.Provider)),
+	wire.Bind(new(interactionadaptors.AnonymousIdentityProvider), new(*identityanonymous.Provider)),
 	wire.Bind(new(interactionadaptors.PasswordAuthenticatorProvider), new(*authenticatorpassword.Provider)),
 	wire.Bind(new(interactionadaptors.TOTPAuthenticatorProvider), new(*authenticatortotp.Provider)),
 	wire.Bind(new(interactionadaptors.OOBOTPAuthenticatorProvider), new(*authenticatoroob.Provider)),
@@ -184,10 +188,17 @@ var interactionDependencySet = wire.NewSet(
 	wire.Bind(new(interactionadaptors.RecoveryCodeAuthenticatorProvider), new(*authenticatorrecoverycode.Provider)),
 
 	wire.Bind(new(interactionflows.InteractionProvider), new(*interaction.Provider)),
+	wire.Bind(new(interactionflows.AnonymousIdentityProvider), new(*identityanonymous.Provider)),
 
 	wire.Bind(new(webapp.InteractionFlow), new(*interactionflows.WebAppFlow)),
+	wire.Bind(new(oauthhandler.AnonymousInteractionFlow), new(*interactionflows.AnonymousFlow)),
 
 	wire.Bind(new(hook.LoginIDProvider), new(*identityloginid.Provider)),
+)
+
+var challengeDependencySet = wire.NewSet(
+	challenge.DependencySet,
+	wire.Bind(new(interactionflows.ChallengeProvider), new(*challenge.Provider)),
 )
 
 var CommonDependencySet = wire.NewSet(
@@ -243,6 +254,7 @@ var CommonDependencySet = wire.NewSet(
 	welcemail.DependencySet,
 	userverify.DependencySet,
 	forgotpassword.DependencySet,
+	challengeDependencySet,
 	interactionDependencySet,
 )
 

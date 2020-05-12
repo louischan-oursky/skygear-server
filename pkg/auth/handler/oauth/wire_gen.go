@@ -7,19 +7,36 @@ package oauth
 
 import (
 	"github.com/skygeario/skygear-server/pkg/auth"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/audit"
 	auth2 "github.com/skygeario/skygear-server/pkg/auth/dependency/auth"
 	redis2 "github.com/skygeario/skygear-server/pkg/auth/dependency/auth/redis"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/bearertoken"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/oob"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/password"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/recoverycode"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/totp"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/challenge"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/hook"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/identity/anonymous"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/identity/loginid"
+	oauth2 "github.com/skygeario/skygear-server/pkg/auth/dependency/identity/oauth"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/interaction"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/interaction/adaptors"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/interaction/flows"
+	redis4 "github.com/skygeario/skygear-server/pkg/auth/dependency/interaction/redis"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/oauth"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/oauth/handler"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/oauth/pq"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/oauth/redis"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/oidc"
 	handler2 "github.com/skygeario/skygear-server/pkg/auth/dependency/oidc/handler"
+	pq2 "github.com/skygeario/skygear-server/pkg/auth/dependency/passwordhistory/pq"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/session"
 	redis3 "github.com/skygeario/skygear-server/pkg/auth/dependency/session/redis"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/urlprefix"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/userprofile"
-	pq2 "github.com/skygeario/skygear-server/pkg/core/auth/authinfo/pq"
+	"github.com/skygeario/skygear-server/pkg/core/async"
+	pq3 "github.com/skygeario/skygear-server/pkg/core/auth/authinfo/pq"
 	"github.com/skygeario/skygear-server/pkg/core/config"
 	"github.com/skygeario/skygear-server/pkg/core/db"
 	"github.com/skygeario/skygear-server/pkg/core/logging"
@@ -84,12 +101,48 @@ func newTokenHandler(r *http.Request, m auth.DependencyMap) http.Handler {
 		Store: eventStore,
 	}
 	sessionProvider := session.ProvideSessionProvider(r, store, authAccessEventProvider, tenantConfiguration)
+	redisStore := redis4.ProvideStore(context, tenantConfiguration, provider)
+	reservedNameChecker := auth.ProvideReservedNameChecker(m)
+	loginidProvider := loginid.ProvideProvider(sqlBuilder, sqlExecutor, provider, tenantConfiguration, reservedNameChecker)
+	oauthProvider := oauth2.ProvideProvider(sqlBuilder, sqlExecutor, provider)
+	anonymousProvider := anonymous.ProvideProvider(sqlBuilder, sqlExecutor)
+	identityAdaptor := &adaptors.IdentityAdaptor{
+		LoginID:   loginidProvider,
+		OAuth:     oauthProvider,
+		Anonymous: anonymousProvider,
+	}
+	passwordhistoryStore := pq2.ProvidePasswordHistoryStore(provider, sqlBuilder, sqlExecutor)
+	passwordChecker := audit.ProvidePasswordChecker(tenantConfiguration, passwordhistoryStore)
+	passwordProvider := password.ProvideProvider(sqlBuilder, sqlExecutor, provider, factory, passwordhistoryStore, passwordChecker, tenantConfiguration)
+	totpProvider := totp.ProvideProvider(sqlBuilder, sqlExecutor, provider, tenantConfiguration)
+	engine := auth.ProvideTemplateEngine(tenantConfiguration, m)
 	urlprefixProvider := urlprefix.NewProvider(r)
-	authinfoStore := pq2.ProvideStore(sqlBuilderFactory, sqlExecutor)
+	executor := auth.ProvideTaskExecutor(m)
+	queue := async.ProvideTaskQueue(context, txContext, requestID, tenantConfiguration, executor)
+	oobProvider := oob.ProvideProvider(tenantConfiguration, sqlBuilder, sqlExecutor, provider, engine, urlprefixProvider, queue)
+	bearertokenProvider := bearertoken.ProvideProvider(sqlBuilder, sqlExecutor, provider, tenantConfiguration)
+	recoverycodeProvider := recoverycode.ProvideProvider(sqlBuilder, sqlExecutor, provider, tenantConfiguration)
+	authenticatorAdaptor := &adaptors.AuthenticatorAdaptor{
+		Password:     passwordProvider,
+		TOTP:         totpProvider,
+		OOBOTP:       oobProvider,
+		BearerToken:  bearertokenProvider,
+		RecoveryCode: recoverycodeProvider,
+	}
+	authinfoStore := pq3.ProvideStore(sqlBuilderFactory, sqlExecutor)
 	userprofileStore := userprofile.ProvideStore(provider, sqlBuilder, sqlExecutor)
+	hookProvider := hook.ProvideHookProvider(context, sqlBuilder, sqlExecutor, requestID, tenantConfiguration, txContext, provider, authinfoStore, userprofileStore, loginidProvider, factory)
+	userProvider := interaction.ProvideUserProvider(authinfoStore, userprofileStore, provider, hookProvider, urlprefixProvider, queue, tenantConfiguration)
+	interactionProvider := interaction.ProvideProvider(redisStore, provider, factory, identityAdaptor, authenticatorAdaptor, userProvider, oobProvider, tenantConfiguration, hookProvider)
+	provider2 := challenge.ProvideProvider(context, provider, tenantConfiguration)
+	anonymousFlow := &flows.AnonymousFlow{
+		Interactions: interactionProvider,
+		Anonymous:    anonymousProvider,
+		Challenges:   provider2,
+	}
 	idTokenIssuer := oidc.ProvideIDTokenIssuer(tenantConfiguration, urlprefixProvider, authinfoStore, userprofileStore, provider)
 	tokenGenerator := _wireTokenGeneratorValue
-	tokenHandler := handler.ProvideTokenHandler(r, tenantConfiguration, factory, authorizationStore, grantStore, grantStore, grantStore, accessEventProvider, sessionProvider, idTokenIssuer, tokenGenerator, provider)
+	tokenHandler := handler.ProvideTokenHandler(r, tenantConfiguration, factory, authorizationStore, grantStore, grantStore, grantStore, accessEventProvider, sessionProvider, anonymousFlow, idTokenIssuer, tokenGenerator, provider)
 	httpHandler := provideTokenHandler(factory, txContext, tokenHandler)
 	return httpHandler
 }
@@ -150,7 +203,7 @@ func newUserInfoHandler(r *http.Request, m auth.DependencyMap) http.Handler {
 	provider := urlprefix.NewProvider(r)
 	sqlBuilderFactory := db.ProvideSQLBuilderFactory(tenantConfiguration)
 	sqlExecutor := db.ProvideSQLExecutor(context, tenantConfiguration)
-	store := pq2.ProvideStore(sqlBuilderFactory, sqlExecutor)
+	store := pq3.ProvideStore(sqlBuilderFactory, sqlExecutor)
 	timeProvider := time.NewProvider()
 	sqlBuilder := auth.ProvideAuthSQLBuilder(sqlBuilderFactory)
 	userprofileStore := userprofile.ProvideStore(timeProvider, sqlBuilder, sqlExecutor)
@@ -171,6 +224,20 @@ func newEndSessionHandler(r *http.Request, m auth.DependencyMap) http.Handler {
 	}
 	endSessionHandler := handler2.ProvideEndSessionHandler(tenantConfiguration, endpointsProvider, endpointsProvider, endpointsProvider)
 	httpHandler := provideEndSessionHandler(factory, txContext, endSessionHandler)
+	return httpHandler
+}
+
+func newChallengeHandler(r *http.Request, m auth.DependencyMap) http.Handler {
+	validator := auth.ProvideValidator(m)
+	context := auth.ProvideContext(r)
+	provider := time.NewProvider()
+	tenantConfiguration := auth.ProvideTenantConfig(context, m)
+	provider2 := challenge.ProvideProvider(context, provider, tenantConfiguration)
+	challengeHandler := &ChallengeHandler{
+		Validator:  validator,
+		Challenges: provider2,
+	}
+	httpHandler := provideChallengeHandler(challengeHandler)
 	return httpHandler
 }
 
@@ -203,9 +270,9 @@ func provideRevokeHandler(lf logging.Factory, tx db.TxContext, rh oauthRevokeHan
 	return h
 }
 
-func provideMetadataHandler(oauth2 *oauth.MetadataProvider, oidc2 *oidc.MetadataProvider) http.Handler {
+func provideMetadataHandler(oauth3 *oauth.MetadataProvider, oidc2 *oidc.MetadataProvider) http.Handler {
 	h := &MetadataHandler{
-		metaProviders: []oauthMetadataProvider{oauth2, oidc2},
+		metaProviders: []oauthMetadataProvider{oauth3, oidc2},
 	}
 	return h
 }
@@ -232,5 +299,9 @@ func provideEndSessionHandler(lf logging.Factory, tx db.TxContext, esh oidcEndSe
 		txContext:         tx,
 		endSessionHandler: esh,
 	}
+	return h
+}
+
+func provideChallengeHandler(h *ChallengeHandler) http.Handler {
 	return h
 }

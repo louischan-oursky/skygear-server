@@ -15,7 +15,9 @@ import (
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/password"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/recoverycode"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator/totp"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/challenge"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/hook"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/identity/anonymous"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/identity/loginid"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/identity/oauth"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/interaction"
@@ -59,9 +61,11 @@ func newLoginHandler(r *http.Request, m auth.DependencyMap) http.Handler {
 	reservedNameChecker := auth.ProvideReservedNameChecker(m)
 	loginidProvider := loginid.ProvideProvider(sqlBuilder, sqlExecutor, provider, tenantConfiguration, reservedNameChecker)
 	oauthProvider := oauth.ProvideProvider(sqlBuilder, sqlExecutor, provider)
+	anonymousProvider := anonymous.ProvideProvider(sqlBuilder, sqlExecutor)
 	identityAdaptor := &adaptors.IdentityAdaptor{
-		LoginID: loginidProvider,
-		OAuth:   oauthProvider,
+		LoginID:   loginidProvider,
+		OAuth:     oauthProvider,
+		Anonymous: anonymousProvider,
 	}
 	passwordhistoryStore := pq.ProvidePasswordHistoryStore(provider, sqlBuilder, sqlExecutor)
 	passwordChecker := audit.ProvidePasswordChecker(tenantConfiguration, passwordhistoryStore)
@@ -101,9 +105,15 @@ func newLoginHandler(r *http.Request, m auth.DependencyMap) http.Handler {
 		Store: eventStore,
 	}
 	sessionProvider := session.ProvideSessionProvider(r, sessionStore, authAccessEventProvider, tenantConfiguration)
+	challengeProvider := challenge.ProvideProvider(context, provider, tenantConfiguration)
+	anonymousFlow := &flows.AnonymousFlow{
+		Interactions: interactionProvider,
+		Anonymous:    anonymousProvider,
+		Challenges:   challengeProvider,
+	}
 	idTokenIssuer := oidc.ProvideIDTokenIssuer(tenantConfiguration, urlprefixProvider, authinfoStore, userprofileStore, provider)
 	tokenGenerator := _wireTokenGeneratorValue
-	tokenHandler := handler2.ProvideTokenHandler(r, tenantConfiguration, factory, authorizationStore, grantStore, grantStore, grantStore, accessEventProvider, sessionProvider, idTokenIssuer, tokenGenerator, provider)
+	tokenHandler := handler2.ProvideTokenHandler(r, tenantConfiguration, factory, authorizationStore, grantStore, grantStore, grantStore, accessEventProvider, sessionProvider, anonymousFlow, idTokenIssuer, tokenGenerator, provider)
 	insecureCookieConfig := auth.ProvideSessionInsecureCookieConfig(m)
 	cookieConfiguration := session.ProvideSessionCookieConfiguration(r, insecureCookieConfig, tenantConfiguration)
 	userController := flows.ProvideUserController(authinfoStore, userprofileStore, tokenHandler, cookieConfiguration, sessionProvider, hookProvider, provider, tenantConfiguration)
@@ -134,9 +144,11 @@ func newSignupHandler(r *http.Request, m auth.DependencyMap) http.Handler {
 	reservedNameChecker := auth.ProvideReservedNameChecker(m)
 	loginidProvider := loginid.ProvideProvider(sqlBuilder, sqlExecutor, provider, tenantConfiguration, reservedNameChecker)
 	oauthProvider := oauth.ProvideProvider(sqlBuilder, sqlExecutor, provider)
+	anonymousProvider := anonymous.ProvideProvider(sqlBuilder, sqlExecutor)
 	identityAdaptor := &adaptors.IdentityAdaptor{
-		LoginID: loginidProvider,
-		OAuth:   oauthProvider,
+		LoginID:   loginidProvider,
+		OAuth:     oauthProvider,
+		Anonymous: anonymousProvider,
 	}
 	passwordhistoryStore := pq.ProvidePasswordHistoryStore(provider, sqlBuilder, sqlExecutor)
 	passwordChecker := audit.ProvidePasswordChecker(tenantConfiguration, passwordhistoryStore)
@@ -176,9 +188,15 @@ func newSignupHandler(r *http.Request, m auth.DependencyMap) http.Handler {
 		Store: eventStore,
 	}
 	sessionProvider := session.ProvideSessionProvider(r, sessionStore, authAccessEventProvider, tenantConfiguration)
+	challengeProvider := challenge.ProvideProvider(context, provider, tenantConfiguration)
+	anonymousFlow := &flows.AnonymousFlow{
+		Interactions: interactionProvider,
+		Anonymous:    anonymousProvider,
+		Challenges:   challengeProvider,
+	}
 	idTokenIssuer := oidc.ProvideIDTokenIssuer(tenantConfiguration, urlprefixProvider, authinfoStore, userprofileStore, provider)
 	tokenGenerator := _wireTokenGeneratorValue
-	tokenHandler := handler2.ProvideTokenHandler(r, tenantConfiguration, factory, authorizationStore, grantStore, grantStore, grantStore, accessEventProvider, sessionProvider, idTokenIssuer, tokenGenerator, provider)
+	tokenHandler := handler2.ProvideTokenHandler(r, tenantConfiguration, factory, authorizationStore, grantStore, grantStore, grantStore, accessEventProvider, sessionProvider, anonymousFlow, idTokenIssuer, tokenGenerator, provider)
 	insecureCookieConfig := auth.ProvideSessionInsecureCookieConfig(m)
 	cookieConfiguration := session.ProvideSessionCookieConfiguration(r, insecureCookieConfig, tenantConfiguration)
 	userController := flows.ProvideUserController(authinfoStore, userprofileStore, tokenHandler, cookieConfiguration, sessionProvider, hookProvider, provider, tenantConfiguration)
@@ -251,13 +269,49 @@ func newRefreshHandler(r *http.Request, m auth.DependencyMap) http.Handler {
 		Store: eventStore,
 	}
 	sessionProvider := session.ProvideSessionProvider(r, store, authAccessEventProvider, tenantConfiguration)
+	redisStore := redis.ProvideStore(context, tenantConfiguration, provider)
+	reservedNameChecker := auth.ProvideReservedNameChecker(m)
+	loginidProvider := loginid.ProvideProvider(sqlBuilder, sqlExecutor, provider, tenantConfiguration, reservedNameChecker)
+	oauthProvider := oauth.ProvideProvider(sqlBuilder, sqlExecutor, provider)
+	anonymousProvider := anonymous.ProvideProvider(sqlBuilder, sqlExecutor)
+	identityAdaptor := &adaptors.IdentityAdaptor{
+		LoginID:   loginidProvider,
+		OAuth:     oauthProvider,
+		Anonymous: anonymousProvider,
+	}
+	passwordhistoryStore := pq.ProvidePasswordHistoryStore(provider, sqlBuilder, sqlExecutor)
+	passwordChecker := audit.ProvidePasswordChecker(tenantConfiguration, passwordhistoryStore)
+	passwordProvider := password.ProvideProvider(sqlBuilder, sqlExecutor, provider, factory, passwordhistoryStore, passwordChecker, tenantConfiguration)
+	totpProvider := totp.ProvideProvider(sqlBuilder, sqlExecutor, provider, tenantConfiguration)
+	engine := auth.ProvideTemplateEngine(tenantConfiguration, m)
 	urlprefixProvider := urlprefix.NewProvider(r)
+	txContext := db.ProvideTxContext(context, tenantConfiguration)
+	executor := auth.ProvideTaskExecutor(m)
+	queue := async.ProvideTaskQueue(context, txContext, requestID, tenantConfiguration, executor)
+	oobProvider := oob.ProvideProvider(tenantConfiguration, sqlBuilder, sqlExecutor, provider, engine, urlprefixProvider, queue)
+	bearertokenProvider := bearertoken.ProvideProvider(sqlBuilder, sqlExecutor, provider, tenantConfiguration)
+	recoverycodeProvider := recoverycode.ProvideProvider(sqlBuilder, sqlExecutor, provider, tenantConfiguration)
+	authenticatorAdaptor := &adaptors.AuthenticatorAdaptor{
+		Password:     passwordProvider,
+		TOTP:         totpProvider,
+		OOBOTP:       oobProvider,
+		BearerToken:  bearertokenProvider,
+		RecoveryCode: recoverycodeProvider,
+	}
 	authinfoStore := pq2.ProvideStore(sqlBuilderFactory, sqlExecutor)
 	userprofileStore := userprofile.ProvideStore(provider, sqlBuilder, sqlExecutor)
+	hookProvider := hook.ProvideHookProvider(context, sqlBuilder, sqlExecutor, requestID, tenantConfiguration, txContext, provider, authinfoStore, userprofileStore, loginidProvider, factory)
+	userProvider := interaction.ProvideUserProvider(authinfoStore, userprofileStore, provider, hookProvider, urlprefixProvider, queue, tenantConfiguration)
+	interactionProvider := interaction.ProvideProvider(redisStore, provider, factory, identityAdaptor, authenticatorAdaptor, userProvider, oobProvider, tenantConfiguration, hookProvider)
+	challengeProvider := challenge.ProvideProvider(context, provider, tenantConfiguration)
+	anonymousFlow := &flows.AnonymousFlow{
+		Interactions: interactionProvider,
+		Anonymous:    anonymousProvider,
+		Challenges:   challengeProvider,
+	}
 	idTokenIssuer := oidc.ProvideIDTokenIssuer(tenantConfiguration, urlprefixProvider, authinfoStore, userprofileStore, provider)
 	tokenGenerator := _wireTokenGeneratorValue
-	tokenHandler := handler2.ProvideTokenHandler(r, tenantConfiguration, factory, authorizationStore, grantStore, grantStore, grantStore, accessEventProvider, sessionProvider, idTokenIssuer, tokenGenerator, provider)
-	txContext := db.ProvideTxContext(context, tenantConfiguration)
+	tokenHandler := handler2.ProvideTokenHandler(r, tenantConfiguration, factory, authorizationStore, grantStore, grantStore, grantStore, accessEventProvider, sessionProvider, anonymousFlow, idTokenIssuer, tokenGenerator, provider)
 	httpHandler := provideRefreshHandler(requireAuthz, validator, tokenHandler, txContext)
 	return httpHandler
 }
