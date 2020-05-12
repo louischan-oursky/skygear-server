@@ -3,6 +3,7 @@ package interaction
 import (
 	"fmt"
 
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/identity"
 	"github.com/skygeario/skygear-server/pkg/core/authn"
 	"github.com/skygeario/skygear-server/pkg/core/config"
@@ -179,14 +180,14 @@ var identityPrimaryAuthenticators = map[authn.IdentityType]map[authn.Authenticat
 	},
 }
 
-func (p *Provider) getAvailablePrimaryAuthenticators(is IdentitySpec) []AuthenticatorSpec {
-	var as []AuthenticatorSpec
+func (p *Provider) getAvailablePrimaryAuthenticators(is identity.Spec) []authenticator.Spec {
+	var as []authenticator.Spec
 	for _, t := range p.Config.PrimaryAuthenticators {
 		authenticatorType := authn.AuthenticatorType(t)
 		if !identityPrimaryAuthenticators[is.Type][authenticatorType] {
 			continue
 		}
-		spec := p.Identity.RelateIdentityToAuthenticator(is, &AuthenticatorSpec{
+		spec := p.Identity.RelateIdentityToAuthenticator(is, &authenticator.Spec{
 			Type:  authenticatorType,
 			Props: map[string]interface{}{},
 		})
@@ -197,15 +198,15 @@ func (p *Provider) getAvailablePrimaryAuthenticators(is IdentitySpec) []Authenti
 	return as
 }
 
-func (p *Provider) getAvailableSecondaryAuthenticators() []AuthenticatorSpec {
-	var as []AuthenticatorSpec
+func (p *Provider) getAvailableSecondaryAuthenticators() []authenticator.Spec {
+	var as []authenticator.Spec
 	for _, t := range p.Config.SecondaryAuthenticators {
-		as = append(as, AuthenticatorSpec{Type: authn.AuthenticatorType(t), Props: map[string]interface{}{}})
+		as = append(as, authenticator.Spec{Type: authn.AuthenticatorType(t), Props: map[string]interface{}{}})
 	}
 	return as
 }
 
-func (p *Provider) listPrimaryAuthenticators(is IdentitySpec) (specs []AuthenticatorSpec, err error) {
+func (p *Provider) listPrimaryAuthenticators(is identity.Spec) (specs []authenticator.Spec, err error) {
 	// Now we use skygear claims to find exactly one identity.
 	// In the future we may use OIDC claims to list all identities and
 	// resolve which user the actor want to authenticate as.
@@ -234,8 +235,8 @@ func (p *Provider) listPrimaryAuthenticators(is IdentitySpec) (specs []Authentic
 	return
 }
 
-func (p *Provider) listSecondaryAuthenticators(userID string) ([]AuthenticatorSpec, error) {
-	var as []AuthenticatorSpec
+func (p *Provider) listSecondaryAuthenticators(userID string) ([]authenticator.Spec, error) {
+	var as []authenticator.Spec
 	for _, t := range p.Config.SecondaryAuthenticators {
 		ais, err := p.Authenticator.List(userID, authn.AuthenticatorType(t))
 		if err != nil {
@@ -248,7 +249,7 @@ func (p *Provider) listSecondaryAuthenticators(userID string) ([]AuthenticatorSp
 	return as, nil
 }
 
-func (p *Provider) getNeedSetupPrimaryAuthenticatorsWithNewIdentity(userID string, is IdentitySpec, ii *IdentityInfo) ([]AuthenticatorSpec, error) {
+func (p *Provider) getNeedSetupPrimaryAuthenticatorsWithNewIdentity(userID string, is identity.Spec, ii *identity.Info) ([]authenticator.Spec, error) {
 	availableAuthenticators := p.getAvailablePrimaryAuthenticators(is)
 	identityAuthenticators, err := p.Authenticator.ListByIdentity(userID, ii)
 	if err != nil {
@@ -268,5 +269,5 @@ func (p *Provider) getNeedSetupPrimaryAuthenticatorsWithNewIdentity(userID strin
 	if needPrimaryAuthn {
 		return availableAuthenticators, nil
 	}
-	return []AuthenticatorSpec{}, nil
+	return []authenticator.Spec{}, nil
 }

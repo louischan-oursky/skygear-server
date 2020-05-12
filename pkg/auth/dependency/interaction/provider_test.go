@@ -7,7 +7,9 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/smartystreets/goconvey/convey"
 
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/hook"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/identity"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/interaction"
 	"github.com/skygeario/skygear-server/pkg/auth/event"
 	"github.com/skygeario/skygear-server/pkg/auth/model"
@@ -24,7 +26,7 @@ func TestProvider(t *testing.T) {
 				Convey("step 1", func() {
 					i, err := p.NewInteractionSignup(
 						&interaction.IntentSignup{
-							Identity: interaction.IdentitySpec{
+							Identity: identity.Spec{
 								Type:   authn.IdentityTypeLoginID,
 								Claims: map[string]interface{}{"email": "user@example.com"},
 							},
@@ -39,7 +41,7 @@ func TestProvider(t *testing.T) {
 					So(state.Steps, ShouldHaveLength, 1)
 					So(state.Steps[0].Step, ShouldEqual, interaction.StepSetupPrimaryAuthenticator)
 					So(state.Steps[0].AvailableAuthenticators, ShouldNotBeEmpty)
-					So(state.Steps[0].AvailableAuthenticators[0], ShouldResemble, interaction.AuthenticatorSpec{
+					So(state.Steps[0].AvailableAuthenticators[0], ShouldResemble, authenticator.Spec{
 						Type:  authn.AuthenticatorTypePassword,
 						Props: map[string]interface{}{},
 					})
@@ -58,7 +60,7 @@ func TestProvider(t *testing.T) {
 					So(state.Steps, ShouldHaveLength, 1)
 					So(state.Steps[0].Step, ShouldEqual, interaction.StepSetupPrimaryAuthenticator)
 					So(state.Steps[0].AvailableAuthenticators, ShouldNotBeEmpty)
-					So(state.Steps[0].AvailableAuthenticators[0], ShouldResemble, interaction.AuthenticatorSpec{
+					So(state.Steps[0].AvailableAuthenticators[0], ShouldResemble, authenticator.Spec{
 						Type:  authn.AuthenticatorTypePassword,
 						Props: map[string]interface{}{},
 					})
@@ -83,7 +85,7 @@ func TestProvider(t *testing.T) {
 			Convey("Login", func() {
 				Convey("step 1", func() {
 					i, err := p.NewInteractionLogin(
-						&interaction.IntentLogin{Identity: interaction.IdentitySpec{
+						&interaction.IntentLogin{Identity: identity.Spec{
 							Type:   authn.IdentityTypeLoginID,
 							Claims: map[string]interface{}{"email": "user@example.com"},
 						}},
@@ -96,7 +98,7 @@ func TestProvider(t *testing.T) {
 					So(state.Steps, ShouldHaveLength, 1)
 					So(state.Steps[0].Step, ShouldEqual, interaction.StepAuthenticatePrimary)
 					So(state.Steps[0].AvailableAuthenticators, ShouldNotBeEmpty)
-					So(state.Steps[0].AvailableAuthenticators[0], ShouldResemble, interaction.AuthenticatorSpec{
+					So(state.Steps[0].AvailableAuthenticators[0], ShouldResemble, authenticator.Spec{
 						Type:  authn.AuthenticatorTypePassword,
 						Props: map[string]interface{}{},
 					})
@@ -115,7 +117,7 @@ func TestProvider(t *testing.T) {
 					So(state.Steps, ShouldHaveLength, 1)
 					So(state.Steps[0].Step, ShouldEqual, interaction.StepAuthenticatePrimary)
 					So(state.Steps[0].AvailableAuthenticators, ShouldNotBeEmpty)
-					So(state.Steps[0].AvailableAuthenticators[0], ShouldResemble, interaction.AuthenticatorSpec{
+					So(state.Steps[0].AvailableAuthenticators[0], ShouldResemble, authenticator.Spec{
 						Type:  authn.AuthenticatorTypePassword,
 						Props: map[string]interface{}{},
 					})
@@ -142,15 +144,15 @@ func TestProvider(t *testing.T) {
 			Convey("step 1", func() {
 				i, err := p.NewInteractionLogin(
 					&interaction.IntentLogin{
-						Identity: interaction.IdentitySpec{
+						Identity: identity.Spec{
 							Type: authn.IdentityTypeOAuth,
 							Claims: map[string]interface{}{
-								interaction.IdentityClaimOAuthProvider: map[string]interface{}{
+								identity.IdentityClaimOAuthProvider: map[string]interface{}{
 									"type":   "azureadv2",
 									"tenant": "example",
 								},
-								interaction.IdentityClaimOAuthSubjectID: "9A8822AA-4F18-4E4C-84AF-E0FD9AB86CB2",
-								interaction.IdentityClaimOAuthProfile:   map[string]interface{}{},
+								identity.IdentityClaimOAuthSubjectID: "9A8822AA-4F18-4E4C-84AF-E0FD9AB86CB2",
+								identity.IdentityClaimOAuthProfile:   map[string]interface{}{},
 							},
 						},
 					},
@@ -163,10 +165,10 @@ func TestProvider(t *testing.T) {
 				So(state.Steps, ShouldHaveLength, 1)
 				So(state.Steps[0].Step, ShouldEqual, interaction.StepAuthenticateSecondary)
 				So(state.Steps[0].AvailableAuthenticators, ShouldNotBeEmpty)
-				So(state.Steps[0].AvailableAuthenticators[0], ShouldResemble, interaction.AuthenticatorSpec{
+				So(state.Steps[0].AvailableAuthenticators[0], ShouldResemble, authenticator.Spec{
 					Type: authn.AuthenticatorTypeTOTP,
 					Props: map[string]interface{}{
-						interaction.AuthenticatorPropTOTPDisplayName: "My Authenticator",
+						authenticator.AuthenticatorPropTOTPDisplayName: "My Authenticator",
 					},
 				})
 
@@ -184,10 +186,10 @@ func TestProvider(t *testing.T) {
 				So(state.Steps, ShouldHaveLength, 1)
 				So(state.Steps[0].Step, ShouldEqual, interaction.StepAuthenticateSecondary)
 				So(state.Steps[0].AvailableAuthenticators, ShouldNotBeEmpty)
-				So(state.Steps[0].AvailableAuthenticators[0], ShouldResemble, interaction.AuthenticatorSpec{
+				So(state.Steps[0].AvailableAuthenticators[0], ShouldResemble, authenticator.Spec{
 					Type: authn.AuthenticatorTypeTOTP,
 					Props: map[string]interface{}{
-						interaction.AuthenticatorPropTOTPDisplayName: "My Authenticator",
+						authenticator.AuthenticatorPropTOTPDisplayName: "My Authenticator",
 					},
 				})
 
@@ -212,10 +214,10 @@ func TestProvider(t *testing.T) {
 			Convey("step 1", func() {
 				i, err := p.NewInteractionAddAuthenticator(
 					&interaction.IntentAddAuthenticator{
-						Authenticator: interaction.AuthenticatorSpec{
+						Authenticator: authenticator.Spec{
 							Type: authn.AuthenticatorTypeTOTP,
 							Props: map[string]interface{}{
-								interaction.AuthenticatorPropTOTPDisplayName: "My Authenticator",
+								authenticator.AuthenticatorPropTOTPDisplayName: "My Authenticator",
 							},
 						},
 					},
@@ -225,11 +227,11 @@ func TestProvider(t *testing.T) {
 				So(err, ShouldBeNil)
 
 				So(i.NewAuthenticators, ShouldNotBeEmpty)
-				So(i.NewAuthenticators, ShouldResemble, []interaction.AuthenticatorSpec{
+				So(i.NewAuthenticators, ShouldResemble, []authenticator.Spec{
 					{
 						Type: authn.AuthenticatorTypeTOTP,
 						Props: map[string]interface{}{
-							interaction.AuthenticatorPropTOTPDisplayName: "My Authenticator",
+							authenticator.AuthenticatorPropTOTPDisplayName: "My Authenticator",
 						},
 					},
 				})
@@ -274,9 +276,9 @@ func TestInteractionProviderProgrammingError(t *testing.T) {
 		}
 		i := &interaction.Interaction{
 			Intent:   &interaction.IntentLogin{},
-			Identity: &interaction.IdentityRef{},
+			Identity: &identity.Ref{},
 		}
-		identityInfo := &interaction.IdentityInfo{}
+		identityInfo := &identity.Info{}
 
 		store.EXPECT().Create(gomock.Any()).Return(nil).AnyTimes()
 		store.EXPECT().Delete(gomock.Any()).Return(nil).AnyTimes()
@@ -321,45 +323,45 @@ func TestProviderCommit(t *testing.T) {
 			Hooks:         hooks,
 		}
 		userID := "userid1"
-		loginID1 := &interaction.IdentityInfo{
+		loginID1 := &identity.Info{
 			ID:   "iid1",
 			Type: authn.IdentityTypeLoginID,
 		}
-		loginID2 := &interaction.IdentityInfo{
+		loginID2 := &identity.Info{
 			ID:   "iid2",
 			Type: authn.IdentityTypeLoginID,
 		}
-		oauthID := &interaction.IdentityInfo{
+		oauthID := &identity.Info{
 			ID:   "iid3",
 			Type: authn.IdentityTypeOAuth,
 		}
-		pwAuthenticator := &interaction.AuthenticatorInfo{
+		pwAuthenticator := &authenticator.Info{
 			ID:   "aid1",
 			Type: authn.AuthenticatorTypePassword,
 		}
-		totpAuthenticator := &interaction.AuthenticatorInfo{
+		totpAuthenticator := &authenticator.Info{
 			ID:   "aid2",
 			Type: authn.AuthenticatorTypeTOTP,
 		}
-		oobAuthenticator := &interaction.AuthenticatorInfo{
+		oobAuthenticator := &authenticator.Info{
 			ID:   "aid3",
 			Type: authn.AuthenticatorTypeOOB,
 		}
 
-		authenticatorProvider.EXPECT().ListByIdentity(userID, loginID1).Return([]*interaction.AuthenticatorInfo{
+		authenticatorProvider.EXPECT().ListByIdentity(userID, loginID1).Return([]*authenticator.Info{
 			pwAuthenticator, totpAuthenticator,
 		}, nil).AnyTimes()
-		authenticatorProvider.EXPECT().ListByIdentity(userID, loginID2).Return([]*interaction.AuthenticatorInfo{
+		authenticatorProvider.EXPECT().ListByIdentity(userID, loginID2).Return([]*authenticator.Info{
 			pwAuthenticator, totpAuthenticator, oobAuthenticator,
 		}, nil).AnyTimes()
-		authenticatorProvider.EXPECT().ListByIdentity(userID, oauthID).Return([]*interaction.AuthenticatorInfo{}, nil).AnyTimes()
+		authenticatorProvider.EXPECT().ListByIdentity(userID, oauthID).Return([]*authenticator.Info{}, nil).AnyTimes()
 
 		store.EXPECT().Create(gomock.Any()).Return(nil).AnyTimes()
 		store.EXPECT().Delete(gomock.Any()).Return(nil).AnyTimes()
 		identityProvider.EXPECT().CreateAll(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		identityProvider.EXPECT().UpdateAll(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		identityProvider.EXPECT().DeleteAll(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-		identityProvider.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(&interaction.IdentityInfo{}, nil).AnyTimes()
+		identityProvider.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any()).Return(&identity.Info{}, nil).AnyTimes()
 		authenticatorProvider.EXPECT().CreateAll(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		authenticatorProvider.EXPECT().DeleteAll(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		userProvider.EXPECT().Get(userID).Return(&model.User{ID: userID}, nil).AnyTimes()
@@ -368,18 +370,18 @@ func TestProviderCommit(t *testing.T) {
 			// remove login id
 			i := &interaction.Interaction{
 				Intent:           &interaction.IntentRemoveIdentity{},
-				Identity:         &interaction.IdentityRef{},
+				Identity:         &identity.Ref{},
 				UserID:           userID,
-				RemoveIdentities: []*interaction.IdentityInfo{loginID1},
+				RemoveIdentities: []*identity.Info{loginID1},
 			}
 			// user has 1 login id and 1 oauth identity
-			identityProvider.EXPECT().ListByUser(gomock.Any()).Return([]*interaction.IdentityInfo{loginID1, oauthID}, nil).AnyTimes()
+			identityProvider.EXPECT().ListByUser(gomock.Any()).Return([]*identity.Info{loginID1, oauthID}, nil).AnyTimes()
 
 			_, err := p.Commit(i)
 			So(err, ShouldBeNil)
 
 			expected := i.RemoveAuthenticators
-			actual := []*interaction.AuthenticatorInfo{
+			actual := []*authenticator.Info{
 				pwAuthenticator, totpAuthenticator,
 			}
 			sort.Sort(authenticatorInfoSlice(expected))
@@ -401,12 +403,12 @@ func TestProviderCommit(t *testing.T) {
 			// remove oauth identity
 			i := &interaction.Interaction{
 				Intent:           &interaction.IntentRemoveIdentity{},
-				Identity:         &interaction.IdentityRef{},
+				Identity:         &identity.Ref{},
 				UserID:           userID,
-				RemoveIdentities: []*interaction.IdentityInfo{oauthID},
+				RemoveIdentities: []*identity.Info{oauthID},
 			}
 			// user has 1 login id and 1 oauth identity
-			identityProvider.EXPECT().ListByUser(gomock.Any()).Return([]*interaction.IdentityInfo{loginID1, oauthID}, nil).AnyTimes()
+			identityProvider.EXPECT().ListByUser(gomock.Any()).Return([]*identity.Info{loginID1, oauthID}, nil).AnyTimes()
 
 			_, err := p.Commit(i)
 			So(err, ShouldBeNil)
@@ -428,12 +430,12 @@ func TestProviderCommit(t *testing.T) {
 			// remove oauth identity
 			i := &interaction.Interaction{
 				Intent:           &interaction.IntentRemoveIdentity{},
-				Identity:         &interaction.IdentityRef{},
+				Identity:         &identity.Ref{},
 				UserID:           userID,
-				RemoveIdentities: []*interaction.IdentityInfo{loginID2},
+				RemoveIdentities: []*identity.Info{loginID2},
 			}
 			// user has 2 login id and 1 oauth identity
-			identityProvider.EXPECT().ListByUser(gomock.Any()).Return([]*interaction.IdentityInfo{loginID1, loginID2, oauthID}, nil).AnyTimes()
+			identityProvider.EXPECT().ListByUser(gomock.Any()).Return([]*identity.Info{loginID1, loginID2, oauthID}, nil).AnyTimes()
 
 			_, err := p.Commit(i)
 			So(err, ShouldBeNil)
@@ -441,7 +443,7 @@ func TestProviderCommit(t *testing.T) {
 			// pw and otp authenticators are used by login id 1 which should be kept
 
 			expected := i.RemoveAuthenticators
-			actual := []*interaction.AuthenticatorInfo{
+			actual := []*authenticator.Info{
 				oobAuthenticator,
 			}
 			sort.Sort(authenticatorInfoSlice(expected))
@@ -461,7 +463,7 @@ func TestProviderCommit(t *testing.T) {
 	})
 }
 
-type authenticatorInfoSlice []*interaction.AuthenticatorInfo
+type authenticatorInfoSlice []*authenticator.Info
 
 func (s authenticatorInfoSlice) Len() int           { return len(s) }
 func (s authenticatorInfoSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }

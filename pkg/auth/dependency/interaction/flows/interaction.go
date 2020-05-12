@@ -1,6 +1,8 @@
 package flows
 
 import (
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/identity"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/interaction"
 	"github.com/skygeario/skygear-server/pkg/core/authn"
 )
@@ -13,8 +15,8 @@ type InteractionProvider interface {
 	NewInteractionLoginAs(
 		intent *interaction.IntentLogin,
 		userID string,
-		identityRef *interaction.IdentityRef,
-		primaryAuthenticatorRef *interaction.AuthenticatorRef,
+		identityRef *identity.Ref,
+		primaryAuthenticatorRef *authenticator.Ref,
 		clientID string,
 	) (*interaction.Interaction, error)
 	NewInteractionSignup(intent *interaction.IntentSignup, clientID string) (*interaction.Interaction, error)

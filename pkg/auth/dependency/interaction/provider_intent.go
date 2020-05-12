@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/auth"
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/authenticator"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/identity"
 	"github.com/skygeario/skygear-server/pkg/core/authn"
 	"github.com/skygeario/skygear-server/pkg/core/uuid"
@@ -12,8 +13,8 @@ import (
 func (p *Provider) NewInteractionLoginAs(
 	intent *IntentLogin,
 	userID string,
-	identityRef *IdentityRef,
-	primaryAuthenticatorRef *AuthenticatorRef,
+	identityRef *identity.Ref,
+	primaryAuthenticatorRef *authenticator.Ref,
 	clientID string,
 ) (*Interaction, error) {
 	identity, err := p.Identity.Get(
@@ -115,7 +116,7 @@ func (p *Provider) NewInteractionAddIdentity(intent *IntentAddIdentity, clientID
 	if err != nil {
 		return nil, err
 	}
-	existingIdentities := []*IdentityInfo{}
+	existingIdentities := []*identity.Info{}
 	for _, oi := range ois {
 		if oi.Type == id.Type {
 			existingIdentities = append(existingIdentities, oi)
@@ -159,7 +160,7 @@ func (p *Provider) NewInteractionUpdateIdentity(intent *IntentUpdateIdentity, cl
 	if err != nil {
 		return nil, err
 	}
-	checkIdentities := []*IdentityInfo{}
+	checkIdentities := []*identity.Info{}
 	for _, oi := range ois {
 		if oi.Type == updateIden.Type {
 			if oi.ID == updateIden.ID {
