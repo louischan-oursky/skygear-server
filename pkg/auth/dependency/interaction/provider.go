@@ -26,6 +26,12 @@ type IdentityProvider interface {
 	Get(userID string, typ authn.IdentityType, id string) (*IdentityInfo, error)
 	// GetByClaims return user ID and information about the identity the matches the provided skygear claims.
 	GetByClaims(typ authn.IdentityType, claims map[string]interface{}) (string, *IdentityInfo, error)
+	// GetByUserAndClaims return user's identity that matches the provide skygear claims.
+	//
+	// Given that user id is provided, the matching rule of this function is less strict than GetByClaims.
+	// For example, login id identity needs match both key and value and oauth identity only needs to match provider id.
+	// This function is currently in used by remove identity interaction.
+	GetByUserAndClaims(typ authn.IdentityType, userID string, claims map[string]interface{}) (*IdentityInfo, error)
 	// ListByClaims return list of identities the matches the provided OIDC standard claims.
 	ListByClaims(claims map[string]string) ([]*IdentityInfo, error)
 	ListByUser(userID string) ([]*IdentityInfo, error)
@@ -33,6 +39,7 @@ type IdentityProvider interface {
 	WithClaims(userID string, ii *IdentityInfo, claims map[string]interface{}) *IdentityInfo
 	CreateAll(userID string, is []*IdentityInfo) error
 	UpdateAll(userID string, is []*IdentityInfo) error
+	DeleteAll(userID string, is []*IdentityInfo) error
 	Validate(is []*IdentityInfo) error
 	// RelateIdentityToAuthenticator tells if authenticatorSpec is compatible with and related to identitySpec.
 	//
@@ -57,6 +64,7 @@ type AuthenticatorProvider interface {
 	ListByIdentity(userID string, ii *IdentityInfo) ([]*AuthenticatorInfo, error)
 	New(userID string, spec AuthenticatorSpec, secret string) ([]*AuthenticatorInfo, error)
 	CreateAll(userID string, ais []*AuthenticatorInfo) error
+	DeleteAll(userID string, ais []*AuthenticatorInfo) error
 	Authenticate(userID string, spec AuthenticatorSpec, state *map[string]string, secret string) (*AuthenticatorInfo, error)
 }
 

@@ -22,6 +22,8 @@ func (p *Provider) Commit(i *Interaction) (*authn.Attrs, error) {
 		err = p.onCommitSignup(i, intent)
 	case *IntentAddIdentity:
 		err = p.onCommitAddIdentity(i, intent, i.UserID)
+	case *IntentRemoveIdentity:
+		err = p.onCommitRemoveIdentity(i, intent, i.UserID)
 	default:
 		panic(fmt.Sprintf("interaction: unknown intent type %T", i.Intent))
 	}
@@ -42,8 +44,17 @@ func (p *Provider) Commit(i *Interaction) (*authn.Attrs, error) {
 		return nil, err
 	}
 
+	// get the identity before deleting
 	identity, err := p.Identity.Get(i.UserID, i.Identity.Type, i.Identity.ID)
 	if err != nil {
+		return nil, err
+	}
+
+	// Delete identities & authenticators
+	if err := p.Identity.DeleteAll(i.UserID, i.RemoveIdentities); err != nil {
+		return nil, err
+	}
+	if err := p.Authenticator.DeleteAll(i.UserID, i.RemoveAuthenticators); err != nil {
 		return nil, err
 	}
 
@@ -118,6 +129,70 @@ func (p *Provider) onCommitAddIdentity(i *Interaction, intent *IntentAddIdentity
 		}
 		err = p.Hooks.DispatchEvent(
 			event.IdentityCreateEvent{
+				User:     *user,
+				Identity: identity,
+			},
+			user,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *Provider) onCommitRemoveIdentity(i *Interaction, intent *IntentRemoveIdentity, userID string) error {
+	// populate remove authenticators
+	ois, err := p.Identity.ListByUser(userID)
+	if err != nil {
+		return err
+	}
+
+	removeIdentitiesID := map[string]interface{}{}
+	keepAuthenticators := map[string]*AuthenticatorInfo{}
+	removeAuthenticators := map[string]*AuthenticatorInfo{}
+
+	// compute set of removing identities id
+	for _, iden := range i.RemoveIdentities {
+		removeIdentitiesID[iden.ID] = struct{}{}
+	}
+
+	for _, oi := range ois {
+		authenticators, err := p.Authenticator.ListByIdentity(userID, oi)
+		if err != nil {
+			return err
+		}
+		_, toRemove := removeIdentitiesID[oi.ID]
+		for _, a := range authenticators {
+			if toRemove {
+				removeAuthenticators[a.ID] = a
+			} else {
+				keepAuthenticators[a.ID] = a
+			}
+		}
+	}
+
+	for _, a := range removeAuthenticators {
+		if _, ok := keepAuthenticators[a.ID]; !ok {
+			// not found in the keep authenticators list
+			i.RemoveAuthenticators = append(i.RemoveAuthenticators, a)
+		}
+	}
+
+	// remove identity event
+	user, err := p.User.Get(userID)
+	if err != nil {
+		return err
+	}
+
+	for _, i := range i.RemoveIdentities {
+		identity := model.Identity{
+			Type:   string(i.Type),
+			Claims: i.Claims,
+		}
+		err = p.Hooks.DispatchEvent(
+			event.IdentityDeleteEvent{
 				User:     *user,
 				Identity: identity,
 			},
