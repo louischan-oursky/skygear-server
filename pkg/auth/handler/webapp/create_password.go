@@ -9,28 +9,28 @@ import (
 	"github.com/skygeario/skygear-server/pkg/core/db"
 )
 
-func AttachSignupPasswordHandler(
+func AttachCreatePasswordHandler(
 	router *mux.Router,
 	authDependency auth.DependencyMap,
 ) {
 	router.
 		NewRoute().
-		Path("/signup/password").
+		Path("/create_password").
 		Methods("OPTIONS", "POST", "GET").
-		Handler(auth.MakeHandler(authDependency, newSignupPasswordHandler))
+		Handler(auth.MakeHandler(authDependency, newCreatePasswordHandler))
 }
 
-type signupPasswordProvider interface {
-	GetSignupPasswordForm(w http.ResponseWriter, r *http.Request) (func(err error), error)
-	PostSignupPassword(w http.ResponseWriter, r *http.Request) (func(err error), error)
+type createPasswordProvider interface {
+	GetCreatePasswordForm(w http.ResponseWriter, r *http.Request) (func(err error), error)
+	CreateSecret(w http.ResponseWriter, r *http.Request) (func(err error), error)
 }
 
-type SignupPasswordHandler struct {
-	Provider  signupPasswordProvider
+type CreatePasswordHandler struct {
+	Provider  createPasswordProvider
 	TxContext db.TxContext
 }
 
-func (h *SignupPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *CreatePasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -38,13 +38,13 @@ func (h *SignupPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 
 	db.WithTx(h.TxContext, func() error {
 		if r.Method == "GET" {
-			writeResponse, err := h.Provider.GetSignupPasswordForm(w, r)
+			writeResponse, err := h.Provider.GetCreatePasswordForm(w, r)
 			writeResponse(err)
 			return err
 		}
 
 		if r.Method == "POST" {
-			writeResponse, err := h.Provider.PostSignupPassword(w, r)
+			writeResponse, err := h.Provider.CreateSecret(w, r)
 			writeResponse(err)
 			return err
 		}

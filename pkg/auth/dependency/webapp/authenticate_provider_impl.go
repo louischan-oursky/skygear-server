@@ -104,7 +104,7 @@ func (p *AuthenticateProviderImpl) restoreState(r *http.Request) (state *State, 
 	return state, nil
 }
 
-func (p *AuthenticateProviderImpl) get(w http.ResponseWriter, r *http.Request, schemaName string, templateType config.TemplateItemType) (writeResponse func(err error), err error) {
+func (p *AuthenticateProviderImpl) get(w http.ResponseWriter, r *http.Request, templateType config.TemplateItemType) (writeResponse func(err error), err error) {
 	var state *State
 	writeResponse = func(err error) {
 		var anyError interface{}
@@ -122,19 +122,14 @@ func (p *AuthenticateProviderImpl) get(w http.ResponseWriter, r *http.Request, s
 
 	p.ValidateProvider.PrepareValues(r.Form)
 
-	err = p.ValidateProvider.Validate(schemaName, r.Form)
-	if err != nil {
-		return
-	}
-
 	return
 }
 
-func (p *AuthenticateProviderImpl) GetLoginForm(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
-	return p.get(w, r, "#WebAppLoginRequest", TemplateItemTypeAuthUILoginHTML)
+func (p *AuthenticateProviderImpl) GetEnterLoginIDForm(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+	return p.get(w, r, TemplateItemTypeAuthUILoginHTML)
 }
 
-func (p *AuthenticateProviderImpl) PostLoginID(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+func (p *AuthenticateProviderImpl) EnterLoginID(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
 	var result *interactionflows.WebAppResult
 	writeResponse = func(err error) {
 		p.persistState(r, err)
@@ -144,19 +139,19 @@ func (p *AuthenticateProviderImpl) PostLoginID(w http.ResponseWriter, r *http.Re
 			var nextPath string
 			switch result.Step {
 			case interactionflows.WebAppStepAuthenticatePassword:
-				nextPath = "/login/password"
+				nextPath = "/enter_password"
 			case interactionflows.WebAppStepAuthenticateOOBOTP:
-				nextPath = "/login/oob_otp"
+				nextPath = "/oob_otp"
 			default:
 				panic("interaction_flow_webapp: unexpected step " + result.Step)
 			}
-			RedirectToPathWithQueryPreserved(w, r, nextPath)
+			RedirectToPathWithX(w, r, nextPath)
 		}
 	}
 
 	p.ValidateProvider.PrepareValues(r.Form)
 
-	err = p.ValidateProvider.Validate("#WebAppLoginLoginIDRequest", r.Form)
+	err = p.ValidateProvider.Validate("#WebAppEnterLoginIDRequest", r.Form)
 	if err != nil {
 		return
 	}
@@ -175,19 +170,15 @@ func (p *AuthenticateProviderImpl) PostLoginID(w http.ResponseWriter, r *http.Re
 	return
 }
 
-func (p *AuthenticateProviderImpl) GetLoginPasswordForm(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
-	return p.get(w, r, "#WebAppLoginLoginIDRequest", TemplateItemTypeAuthUILoginPasswordHTML)
+func (p *AuthenticateProviderImpl) GetEnterPasswordForm(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+	return p.get(w, r, TemplateItemTypeAuthUIEnterPasswordHTML)
 }
 
-func (p *AuthenticateProviderImpl) PostLoginPassword(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
-	return p.PostLoginOOBOTP(w, r)
+func (p *AuthenticateProviderImpl) GetOOBOTPForm(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+	return p.get(w, r, TemplateItemTypeAuthUIOOBOTPHTML)
 }
 
-func (p *AuthenticateProviderImpl) GetLoginOOBOTPForm(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
-	return p.get(w, r, "#WebAppLoginLoginIDRequest", TemplateItemTypeAuthUIOOBOTPHTML)
-}
-
-func (p *AuthenticateProviderImpl) PostLoginOOBOTP(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+func (p *AuthenticateProviderImpl) EnterSecret(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
 	writeResponse = func(err error) {
 		r.Form.Del("x_password")
 		p.persistState(r, err)
@@ -200,7 +191,7 @@ func (p *AuthenticateProviderImpl) PostLoginOOBOTP(w http.ResponseWriter, r *htt
 
 	p.ValidateProvider.PrepareValues(r.Form)
 
-	err = p.ValidateProvider.Validate("#WebAppLoginLoginIDPasswordRequest", r.Form)
+	err = p.ValidateProvider.Validate("#WebAppEnterPasswordRequest", r.Form)
 	if err != nil {
 		return
 	}
@@ -224,7 +215,7 @@ func (p *AuthenticateProviderImpl) PostLoginOOBOTP(w http.ResponseWriter, r *htt
 	return
 }
 
-func (p *AuthenticateProviderImpl) TriggerLoginOOBOTP(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+func (p *AuthenticateProviderImpl) TriggerOOBOTP(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
 	writeResponse = func(err error) {
 		r.Form.Del("x_password")
 		p.persistState(r, err)
@@ -232,11 +223,6 @@ func (p *AuthenticateProviderImpl) TriggerLoginOOBOTP(w http.ResponseWriter, r *
 	}
 
 	p.ValidateProvider.PrepareValues(r.Form)
-
-	err = p.ValidateProvider.Validate("#WebAppLoginLoginIDRequest", r.Form)
-	if err != nil {
-		return
-	}
 
 	result, err := p.Interactions.TriggerOOBOTP(r.Form.Get("x_interaction_token"), interaction.StepAuthenticatePrimary)
 	if err != nil {
@@ -248,43 +234,15 @@ func (p *AuthenticateProviderImpl) TriggerLoginOOBOTP(w http.ResponseWriter, r *
 	return
 }
 
-func (p *AuthenticateProviderImpl) TriggerSignupOOBOTP(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
-	writeResponse = func(err error) {
-		r.Form.Del("x_password")
-		p.persistState(r, err)
-		RedirectToCurrentPath(w, r)
-	}
-
-	p.ValidateProvider.PrepareValues(r.Form)
-
-	err = p.ValidateProvider.Validate("#WebAppSignupLoginIDRequest", r.Form)
-	if err != nil {
-		return
-	}
-
-	result, err := p.Interactions.TriggerOOBOTP(r.Form.Get("x_interaction_token"), interaction.StepSetupPrimaryAuthenticator)
-	if err != nil {
-		return
-	}
-
-	r.Form["x_interaction_token"] = []string{result.Token}
-
-	return
+func (p *AuthenticateProviderImpl) GetCreateLoginIDForm(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+	return p.get(w, r, TemplateItemTypeAuthUISignupHTML)
 }
 
-func (p *AuthenticateProviderImpl) GetSignupForm(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
-	return p.get(w, r, "#WebAppSignupRequest", TemplateItemTypeAuthUISignupHTML)
+func (p *AuthenticateProviderImpl) GetCreatePasswordForm(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+	return p.get(w, r, TemplateItemTypeAuthUICreatePasswordHTML)
 }
 
-func (p *AuthenticateProviderImpl) GetSignupPasswordForm(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
-	return p.get(w, r, "#WebAppSignupLoginIDRequest", TemplateItemTypeAuthUISignupPasswordHTML)
-}
-
-func (p *AuthenticateProviderImpl) GetSignupOOBOTPForm(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
-	return p.get(w, r, "#WebAppSignupLoginIDRequest", TemplateItemTypeAuthUIOOBOTPHTML)
-}
-
-func (p *AuthenticateProviderImpl) PostSignupLoginID(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+func (p *AuthenticateProviderImpl) CreateLoginID(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
 	var result *interactionflows.WebAppResult
 	writeResponse = func(err error) {
 		p.persistState(r, err)
@@ -294,19 +252,19 @@ func (p *AuthenticateProviderImpl) PostSignupLoginID(w http.ResponseWriter, r *h
 			var nextPath string
 			switch result.Step {
 			case interactionflows.WebAppStepSetupPassword:
-				nextPath = "/signup/password"
+				nextPath = "/create_password"
 			case interactionflows.WebAppStepSetupOOBOTP:
-				nextPath = "/signup/oob_otp"
+				nextPath = "/oob_otp"
 			default:
 				panic("interaction_flow_webapp: unexpected step " + result.Step)
 			}
-			RedirectToPathWithQueryPreserved(w, r, nextPath)
+			RedirectToPathWithX(w, r, nextPath)
 		}
 	}
 
 	p.ValidateProvider.PrepareValues(r.Form)
 
-	err = p.ValidateProvider.Validate("#WebAppSignupLoginIDRequest", r.Form)
+	err = p.ValidateProvider.Validate("#WebAppCreateLoginIDRequest", r.Form)
 	if err != nil {
 		return
 	}
@@ -328,11 +286,7 @@ func (p *AuthenticateProviderImpl) PostSignupLoginID(w http.ResponseWriter, r *h
 	return
 }
 
-func (p *AuthenticateProviderImpl) PostSignupPassword(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
-	return p.PostSignupOOBOTP(w, r)
-}
-
-func (p *AuthenticateProviderImpl) PostSignupOOBOTP(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+func (p *AuthenticateProviderImpl) CreateSecret(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
 	writeResponse = func(err error) {
 		r.Form.Del("x_password")
 		p.persistState(r, err)
@@ -345,7 +299,7 @@ func (p *AuthenticateProviderImpl) PostSignupOOBOTP(w http.ResponseWriter, r *ht
 
 	p.ValidateProvider.PrepareValues(r.Form)
 
-	err = p.ValidateProvider.Validate("#WebAppSignupLoginIDPasswordRequest", r.Form)
+	err = p.ValidateProvider.Validate("#WebAppEnterPasswordRequest", r.Form)
 	if err != nil {
 		return
 	}
@@ -388,7 +342,7 @@ func (p *AuthenticateProviderImpl) ChooseIdentityProvider(w http.ResponseWriter,
 	writeResponse = func(err error) {
 		p.persistState(r, err)
 		if err != nil {
-			RedirectToPathWithQueryPreserved(w, r, "/login")
+			RedirectToPathWithX(w, r, "/login")
 		} else {
 			http.Redirect(w, r, authURI, http.StatusFound)
 		}
