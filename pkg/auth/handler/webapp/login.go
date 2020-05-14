@@ -31,8 +31,8 @@ func redirectURIForWebApp(urlPrefix *url.URL, providerConfig config.OAuthProvide
 }
 
 type loginProvider interface {
-	GetEnterLoginIDForm(w http.ResponseWriter, r *http.Request) (func(error), error)
-	EnterLoginID(w http.ResponseWriter, r *http.Request) (func(error), error)
+	GetLoginForm(w http.ResponseWriter, r *http.Request) (func(error), error)
+	LoginWithLoginID(w http.ResponseWriter, r *http.Request) (func(error), error)
 	LoginIdentityProvider(w http.ResponseWriter, r *http.Request, providerAlias string) (func(error), error)
 }
 
@@ -49,7 +49,7 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	db.WithTx(h.TxContext, func() error {
 		if r.Method == "GET" {
-			writeResponse, err := h.Provider.GetEnterLoginIDForm(w, r)
+			writeResponse, err := h.Provider.GetLoginForm(w, r)
 			writeResponse(err)
 			return err
 		}
@@ -61,7 +61,7 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 
-			writeResponse, err := h.Provider.EnterLoginID(w, r)
+			writeResponse, err := h.Provider.LoginWithLoginID(w, r)
 			writeResponse(err)
 			return err
 		}

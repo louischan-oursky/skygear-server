@@ -21,6 +21,7 @@ const (
 	// nolint: gosec
 	TemplateItemTypeAuthUICreatePasswordHTML config.TemplateItemType = "auth_ui_create_password.html"
 	TemplateItemTypeAuthUIOOBOTPHTML         config.TemplateItemType = "auth_ui_oob_otp_html"
+	TemplateItemTypeAuthUIEnterLoginIDHTML   config.TemplateItemType = "auth_ui_enter_login_id.html"
 
 	// Forgot Password
 	// nolint: gosec
@@ -303,20 +304,20 @@ var TemplateAuthUILoginHTML = template.Spec{
 				{{ end }}{{ end }}
 
 				{{ if .x_login_id_input_type }}{{ if and (eq .x_login_id_input_type "phone") .x_login_id_input_type_has_text }}
-				<a class="link anchor align-self-flex-start" href="{{ call .MakeURLWithQuery "x_login_id_input_type" "text" }}">{{ localize "use-text-login-id-description" }}</a>
+				<a class="link align-self-flex-start" href="{{ call .MakeURLWithQuery "x_login_id_input_type" "text" }}">{{ localize "use-text-login-id-description" }}</a>
 				{{ end }}{{ end }}
 				{{ if .x_login_id_input_type }}{{ if and (not (eq .x_login_id_input_type "phone")) .x_login_id_input_type_has_phone }}
-				<a class="link anchor align-self-flex-start" href="{{ call .MakeURLWithQuery "x_login_id_input_type" "phone" }}">{{ localize "use-phone-login-id-description" }}</a>
+				<a class="link align-self-flex-start" href="{{ call .MakeURLWithQuery "x_login_id_input_type" "phone" }}">{{ localize "use-phone-login-id-description" }}</a>
 				{{ end }}{{ end }}
 
 				<div class="link">
 					<span class="primary-text">{{ localize "signup-button-hint" }}</span>
-					<a class="anchor" href="{{ call .MakeURLWithPathWithoutX "/signup" }}">{{ localize "signup-button-label" }}</a>
+					<a href="{{ call .MakeURLWithPathWithoutX "/signup" }}">{{ localize "signup-button-label" }}</a>
 				</div>
-				<a class="link anchor align-self-flex-start" href="{{ call .MakeURLWithPathWithoutX "/forgot_password" }}">{{ localize "forgot-password-button-label" }}</a>
+				<a class="link align-self-flex-start" href="{{ call .MakeURLWithPathWithoutX "/forgot_password" }}">{{ localize "forgot-password-button-label" }}</a>
 
 				{{ if or .x_login_id_input_type_has_phone .x_login_id_input_type_has_text }}
-				<button class="btn primary-btn align-self-flex-end" type="submit" name="submit" value="">{{ localize "confirm-login-id-button-label" }}</button>
+				<button class="btn primary-btn align-self-flex-end" type="submit" name="submit" value="">{{ localize "next-button-label" }}</button>
 				{{ end }}
 			</form>
 		</div>
@@ -366,9 +367,9 @@ var TemplateAuthUIEnterPasswordHTML = template.Spec{
 <button class="btn secondary-btn password-visibility-btn show-password" type="button">{{ localize "show-password" }}</button>
 <button class="btn secondary-btn password-visibility-btn hide-password" type="button">{{ localize "hide-password" }}</button>
 
-<a class="anchor link align-self-flex-start" href="{{ call .MakeURLWithPathWithoutX "/forgot_password" }}">{{ localize "forgot-password-button-label--enter-password-page" }}</a>
+<a class="link align-self-flex-start" href="{{ call .MakeURLWithPathWithoutX "/forgot_password" }}">{{ localize "forgot-password-button-label--enter-password-page" }}</a>
 
-<button class="btn primary-btn align-self-flex-end" type="submit" name="submit" value="">{{ localize "confirm-password-button-label" }}</button>
+<button class="btn primary-btn align-self-flex-end" type="submit" name="submit" value="">{{ localize "next-button-label" }}</button>
 
 </form>
 {{ template "auth_ui_footer.html" . }}
@@ -420,11 +421,85 @@ var TemplateAuthUIOOBOTPHTML = template.Spec{
 
 <input class="input text-input primary-txt" type="text" name="x_password" placeholder="{{ localize "oob-otp-placeholder" }}" value="{{ .x_password }}">
 
-<button class="btn primary-btn align-self-flex-end" type="submit" name="submit" value="">{{ localize "confirm-oob-otp-button-label" }}</button>
+<button class="btn primary-btn align-self-flex-end" type="submit" name="submit" value="">{{ localize "next-button-label" }}</button>
 
 <div class="link">
 	<span class="primary-txt">{{ localize "oob-otp-resend-button-hint" }}</span>
 	<button id="resend-button" class="anchor" type="submit" name="trigger" value="true" data-cooldown="{{ .x_oob_otp_code_send_cooldown }}">{{ localize "oob-otp-resend-button-label" }}</button>
+</div>
+
+</form>
+{{ template "auth_ui_footer.html" . }}
+
+</div>
+</body>
+</html>
+`,
+}
+
+var TemplateAuthUIEnterLoginIDHTML = template.Spec{
+	Type:        TemplateItemTypeAuthUIEnterLoginIDHTML,
+	IsHTML:      true,
+	Translation: TemplateItemTypeAuthUITranslationJSON,
+	Defines:     defines,
+	Components:  components,
+	Default: `<!DOCTYPE html>
+<html>
+{{ template "auth_ui_html_head.html" . }}
+<body class="page">
+<div class="content">
+
+{{ template "auth_ui_header.html" . }}
+
+<form class="simple-form enter-login-id-form" method="post">
+{{ $.csrfField }}
+
+<div class="nav-bar">
+	<button class="btn back-btn" type="button" title="{{ localize "back-button-title" }}"></button>
+</div>
+
+<div class="title primary-txt">
+	{{ if .x_old_login_id_value }}
+	{{ localize "enter-login-id-page-title--change" .x_login_id_key }}
+	{{ else }}
+	{{ localize "enter-login-id-page-title--add" .x_login_id_key }}
+	{{ end }}
+</div>
+
+{{ template "ERROR" . }}
+
+<input type="hidden" name="x_interaction_token" value="{{ .x_interaction_token }}">
+<input type="hidden" name="x_login_id_key" value="{{ .x_login_id_key }}">
+<input type="hidden" name="x_login_id_input_type" value="{{ .x_login_id_input_type }}">
+<input type="hidden" name="x_old_login_id_value" value="{{ .x_old_login_id_value }}">
+
+{{ if eq .x_login_id_input_type "phone" }}
+<div class="phone-input">
+	<select class="input select primary-txt" name="x_calling_code">
+		{{ range .x_calling_codes }}
+		<option
+			value="{{ . }}"
+			{{ if $.x_calling_code }}{{ if eq $.x_calling_code . }}
+			selected
+			{{ end }}{{ end }}
+			>
+			+{{ . }}
+		</option>
+		{{ end }}
+	</select>
+	<input class="input text-input primary-txt" type="tel" name="x_national_number" placeholder="{{ localize "phone-number-placeholder" }}" value="{{ .x_national_number }}">
+</div>
+{{ end }}
+
+{{ if eq .x_login_id_input_type "text" }}
+<input class="input text-input primary-txt" type="text" name="x_login_id" placeholder="{{ localize "login-id-placeholder" }}" value="{{ .x_login_id }}">
+{{ end }}
+
+<div class="buttons">
+  <button class="btn primary-btn" type="submit" name="submit" value="">{{ localize "next-button-label" }}</button>
+  {{ if .x_old_login_id_value }}
+  <button class="anchor" type="submit" name="x_action" value="remove">{{ localize "disconnect-button-label" }}</button>
+  {{ end }}
 </div>
 
 </form>
@@ -486,14 +561,14 @@ var TemplateAuthUIForgotPasswordHTML = template.Spec{
 {{ end }}{{ end }}
 
 {{ if .x_login_id_input_type }}{{ if and (eq .x_login_id_input_type "phone") .x_login_id_input_type_has_text }}
-<a class="link anchor align-self-flex-start" href="{{ call .MakeURLWithQuery "x_login_id_input_type" "text" }}">{{ localize "use-email-login-id-description" }}</a>
+<a class="link align-self-flex-start" href="{{ call .MakeURLWithQuery "x_login_id_input_type" "text" }}">{{ localize "use-email-login-id-description" }}</a>
 {{ end }}{{ end }}
 {{ if .x_login_id_input_type }}{{ if and (not (eq .x_login_id_input_type "phone")) .x_login_id_input_type_has_phone }}
-<a class="link anchor align-self-flex-start" href="{{ call .MakeURLWithQuery "x_login_id_input_type" "phone" }}">{{ localize "use-phone-login-id-description" }}</a>
+<a class="link align-self-flex-start" href="{{ call .MakeURLWithQuery "x_login_id_input_type" "phone" }}">{{ localize "use-phone-login-id-description" }}</a>
 {{ end }}{{ end }}
 
 {{ if or .x_login_id_input_type_has_phone .x_login_id_input_type_has_text }}
-<button class="btn primary-btn submit-btn align-self-flex-end" type="submit" name="submit" value="">{{ localize "confirm-login-id-button-label" }}</button>
+<button class="btn primary-btn submit-btn align-self-flex-end" type="submit" name="submit" value="">{{ localize "next-button-label" }}</button>
 {{ end }}
 
 </form>
@@ -527,7 +602,7 @@ var TemplateAuthUIForgotPasswordSuccessHTML = template.Spec{
 
 <div class="description primary-txt">{{ localize "forgot-password-success-description" .x_login_id }}</div>
 
-<a class="anchor btn primary-btn align-self-flex-end" href="{{ call .MakeURLWithPathWithoutX "/login" }}">{{ localize "login-button-label--forgot-password-success-page" }}</a>
+<a class="btn primary-btn align-self-flex-end" href="{{ call .MakeURLWithPathWithoutX "/login" }}">{{ localize "login-button-label--forgot-password-success-page" }}</a>
 
 </div>
 {{ template "auth_ui_footer.html" . }}
@@ -568,7 +643,7 @@ var TemplateAuthUIResetPasswordHTML = template.Spec{
 
 {{ template "PASSWORD_POLICY" . }}
 
-<button class="btn primary-btn submit-btn align-self-flex-end" type="submit" name="submit" value="">{{ localize "confirm-password-button-label" }}</button>
+<button class="btn primary-btn submit-btn align-self-flex-end" type="submit" name="submit" value="">{{ localize "next-button-label" }}</button>
 
 </form>
 
@@ -695,7 +770,7 @@ var TemplateAuthUISignupHTML = template.Spec{
 
 				{{ range .x_identity_candidates }}
 				{{ if eq .type "login_id" }}{{ if not (eq .login_id_key $.x_login_id_key) }}
-					<a class="link anchor align-self-flex-start"
+					<a class="link align-self-flex-start"
 						href="{{ call $.MakeURLWithQuery "x_login_id_key" .login_id_key "x_login_id_input_type" .login_id_input_type}}">
 						{{ localize "use-login-id-key" .login_id_key }}
 					</a>
@@ -704,12 +779,12 @@ var TemplateAuthUISignupHTML = template.Spec{
 
 				<div class="link align-self-flex-start">
 					<span class="primary-text">{{ localize "login-button-hint" }}</span>
-					<a class="anchor" href="{{ call .MakeURLWithPathWithoutX "/login" }}">{{ localize "login-button-label" }}<a>
+					<a href="{{ call .MakeURLWithPathWithoutX "/login" }}">{{ localize "login-button-label" }}<a>
 				</div>
-				<a class="link anchor align-self-flex-start" href="{{ call .MakeURLWithPathWithoutX "/forgot_password" }}">{{ localize "forgot-password-button-label" }}</a>
+				<a class="link align-self-flex-start" href="{{ call .MakeURLWithPathWithoutX "/forgot_password" }}">{{ localize "forgot-password-button-label" }}</a>
 
 				<button class="btn primary-btn align-self-flex-end" type="submit" name="submit" value="">
-					{{ localize "confirm-login-id-button-label" }}
+					{{ localize "next-button-label" }}
 				</button>
 			</form>
 		</div>
@@ -760,7 +835,7 @@ var TemplateAuthUICreatePasswordHTML = template.Spec{
 
 {{ template "PASSWORD_POLICY" . }}
 
-<button class="btn primary-btn align-self-flex-end" type="submit" name="submit" value="">{{ localize "confirm-password-button-label" }}</button>
+<button class="btn primary-btn align-self-flex-end" type="submit" name="submit" value="">{{ localize "next-button-label" }}</button>
 
 {{ if eq .x_login_id_input_type "phone" }}
 <p class="secondary-txt description">
@@ -878,19 +953,29 @@ var TemplateAuthUISettingsIdentityHTML = template.Spec{
       {{ $.csrfField }}
       <input type="hidden" name="x_idp_id" value="{{ .provider_alias }}">
       {{ if .provider_subject_id }}
-      <button class="btn destructive-btn" type="submit" name="x_action" value="unlink">{{ localize "settings-identity-disconnect" }}</button>
+      <button class="btn destructive-btn" type="submit" name="x_action" value="unlink">{{ localize "disconnect-button-label" }}</button>
       {{ else }}
-      <button class="btn primary-btn" type="submit" name="x_action" value="link">{{ localize "settings-identity-connect" }}</button>
+      <button class="btn primary-btn" type="submit" name="x_action" value="link">{{ localize "connect-button-label" }}</button>
       {{ end }}
       </form>
     {{ end }}
 
     {{ if eq .type "login_id" }}
-      {{ if .login_id_value }}
-      <button class="btn secondary-btn" type="button">{{ localize "settings-identity-change" }}</button>
+      <form method="post">
+      {{ $.csrfField }}
+      <input type="hidden" name="x_login_id_key" value="{{ .login_id_key }}">
+      {{ if eq .login_id_type "phone" }}
+      <input type="hidden" name="x_login_id_input_type" value="phone">
       {{ else }}
-      <button class="btn primary-btn" type="button">{{ localize "settings-identity-connect" }}</button>
+      <input type="hidden" name="x_login_id_input_type" value="text">
       {{ end }}
+      {{ if .login_id_value }}
+      <input type="hidden" name="x_old_login_id_value" value="{{ .login_id_value }}">
+      <button class="btn secondary-btn" type="submit" name="x_action" value="login_id">{{ localize "change-button-label" }}</a>
+      {{ else }}
+      <button class="btn primary-btn" type="submit" name="x_action" value="login_id">{{ localize "connect-button-label" }}</a>
+      {{ end }}
+      </form>
     {{ end }}
   </div>
   {{ end }}

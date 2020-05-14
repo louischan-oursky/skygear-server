@@ -7,7 +7,6 @@ import (
 
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/auth"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/authn"
-	"github.com/skygeario/skygear-server/pkg/auth/dependency/interaction"
 	interactionflows "github.com/skygeario/skygear-server/pkg/auth/dependency/interaction/flows"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/loginid"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/sso"
@@ -23,12 +22,14 @@ import (
 type InteractionFlow interface {
 	LoginWithLoginID(loginID string) (*interactionflows.WebAppResult, error)
 	SignupWithLoginID(loginIDKey, loginID string) (*interactionflows.WebAppResult, error)
-	AuthenticateSecret(token string, secret string) (*interactionflows.WebAppResult, error)
-	TriggerOOBOTP(token string, step interaction.Step) (*interactionflows.WebAppResult, error)
-	SetupSecret(token string, secret string) (*interactionflows.WebAppResult, error)
+	EnterSecret(token string, secret string) (*interactionflows.WebAppResult, error)
+	TriggerOOBOTP(token string) (*interactionflows.WebAppResult, error)
 	LoginWithOAuthProvider(oauthAuthInfo sso.AuthInfo) (*interactionflows.WebAppResult, error)
 	LinkWithOAuthProvider(userID string, oauthAuthInfo sso.AuthInfo) (*interactionflows.WebAppResult, error)
 	UnlinkWithOAuthProvider(userID string, providerConfig config.OAuthProviderConfiguration) (*interactionflows.WebAppResult, error)
+	AddLoginID(userID string, loginID loginid.LoginID) (*interactionflows.WebAppResult, error)
+	UpdateLoginID(userID string, oldLoginID loginid.LoginID, newLoginID loginid.LoginID) (*interactionflows.WebAppResult, error)
+	RemoveLoginID(userID string, loginID loginid.LoginID) (*interactionflows.WebAppResult, error)
 }
 
 type AuthenticateProviderImpl struct {
@@ -129,28 +130,44 @@ func (p *AuthenticateProviderImpl) get(w http.ResponseWriter, r *http.Request, t
 	return
 }
 
-func (p *AuthenticateProviderImpl) GetEnterLoginIDForm(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+func (p *AuthenticateProviderImpl) handleResult(w http.ResponseWriter, r *http.Request, result *interactionflows.WebAppResult, err error) {
+	if err != nil {
+		RedirectToCurrentPath(w, r)
+		return
+	}
+
+	for _, cookie := range result.Cookies {
+		corehttp.UpdateCookie(w, cookie)
+	}
+
+	switch result.Step {
+	case interactionflows.WebAppStepAuthenticatePassword:
+		RedirectToPathWithX(w, r, "/enter_password")
+	case interactionflows.WebAppStepSetupPassword:
+		RedirectToPathWithX(w, r, "/create_password")
+	case interactionflows.WebAppStepAuthenticateOOBOTP:
+		RedirectToPathWithX(w, r, "/oob_otp")
+	case interactionflows.WebAppStepSetupOOBOTP:
+		RedirectToPathWithX(w, r, "/oob_otp")
+	case interactionflows.WebAppStepCompleted:
+		RedirectToRedirectURI(w, r)
+	}
+}
+
+func (p *AuthenticateProviderImpl) GetLoginForm(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
 	return p.get(w, r, TemplateItemTypeAuthUILoginHTML)
 }
 
-func (p *AuthenticateProviderImpl) EnterLoginID(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+func (p *AuthenticateProviderImpl) LoginWithLoginID(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
 	var result *interactionflows.WebAppResult
 	writeResponse = func(err error) {
 		p.persistState(r, err)
-		if err != nil {
-			RedirectToCurrentPath(w, r)
-		} else {
-			var nextPath string
-			switch result.Step {
-			case interactionflows.WebAppStepAuthenticatePassword:
-				nextPath = "/enter_password"
-			case interactionflows.WebAppStepAuthenticateOOBOTP:
-				nextPath = "/oob_otp"
-			default:
-				panic("interaction_flow_webapp: unexpected step " + result.Step)
-			}
-			RedirectToPathWithX(w, r, nextPath)
-		}
+		p.handleResult(w, r, result, err)
+	}
+
+	_, err = p.restoreState(r)
+	if err != nil {
+		return
 	}
 
 	p.ValidateProvider.PrepareValues(r.Form)
@@ -183,14 +200,16 @@ func (p *AuthenticateProviderImpl) GetOOBOTPForm(w http.ResponseWriter, r *http.
 }
 
 func (p *AuthenticateProviderImpl) EnterSecret(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+	var result *interactionflows.WebAppResult
 	writeResponse = func(err error) {
 		r.Form.Del("x_password")
 		p.persistState(r, err)
-		if err != nil {
-			RedirectToCurrentPath(w, r)
-		} else {
-			RedirectToRedirectURI(w, r)
-		}
+		p.handleResult(w, r, result, err)
+	}
+
+	_, err = p.restoreState(r)
+	if err != nil {
+		return
 	}
 
 	p.ValidateProvider.PrepareValues(r.Form)
@@ -200,11 +219,7 @@ func (p *AuthenticateProviderImpl) EnterSecret(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// TODO(interaction): make all handler to call .handleResult
-	// to write interaction token to r.Form and
-	// and set cookies to w.
-	// It is not harmful to always do that.
-	result, err := p.Interactions.AuthenticateSecret(
+	result, err = p.Interactions.EnterSecret(
 		r.Form.Get("x_interaction_token"),
 		r.Form.Get("x_password"),
 	)
@@ -212,28 +227,21 @@ func (p *AuthenticateProviderImpl) EnterSecret(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	for _, cookie := range result.Cookies {
-		corehttp.UpdateCookie(w, cookie)
-	}
-
 	return
 }
 
 func (p *AuthenticateProviderImpl) TriggerOOBOTP(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+	var result *interactionflows.WebAppResult
 	writeResponse = func(err error) {
-		r.Form.Del("x_password")
-		p.persistState(r, err)
-		RedirectToCurrentPath(w, r)
+		p.handleResult(w, r, result, err)
 	}
 
 	p.ValidateProvider.PrepareValues(r.Form)
 
-	result, err := p.Interactions.TriggerOOBOTP(r.Form.Get("x_interaction_token"), interaction.StepAuthenticatePrimary)
+	result, err = p.Interactions.TriggerOOBOTP(r.Form.Get("x_interaction_token"))
 	if err != nil {
 		return
 	}
-
-	r.Form["x_interaction_token"] = []string{result.Token}
 
 	return
 }
@@ -250,20 +258,12 @@ func (p *AuthenticateProviderImpl) CreateLoginID(w http.ResponseWriter, r *http.
 	var result *interactionflows.WebAppResult
 	writeResponse = func(err error) {
 		p.persistState(r, err)
-		if err != nil {
-			RedirectToCurrentPath(w, r)
-		} else {
-			var nextPath string
-			switch result.Step {
-			case interactionflows.WebAppStepSetupPassword:
-				nextPath = "/create_password"
-			case interactionflows.WebAppStepSetupOOBOTP:
-				nextPath = "/oob_otp"
-			default:
-				panic("interaction_flow_webapp: unexpected step " + result.Step)
-			}
-			RedirectToPathWithX(w, r, nextPath)
-		}
+		p.handleResult(w, r, result, err)
+	}
+
+	_, err = p.restoreState(r)
+	if err != nil {
+		return
 	}
 
 	p.ValidateProvider.PrepareValues(r.Form)
@@ -287,39 +287,6 @@ func (p *AuthenticateProviderImpl) CreateLoginID(w http.ResponseWriter, r *http.
 	}
 
 	r.Form["x_interaction_token"] = []string{result.Token}
-	return
-}
-
-func (p *AuthenticateProviderImpl) CreateSecret(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
-	writeResponse = func(err error) {
-		r.Form.Del("x_password")
-		p.persistState(r, err)
-		if err != nil {
-			RedirectToCurrentPath(w, r)
-		} else {
-			RedirectToRedirectURI(w, r)
-		}
-	}
-
-	p.ValidateProvider.PrepareValues(r.Form)
-
-	err = p.ValidateProvider.Validate("#WebAppEnterPasswordRequest", r.Form)
-	if err != nil {
-		return
-	}
-
-	result, err := p.Interactions.SetupSecret(
-		r.Form.Get("x_interaction_token"),
-		r.Form.Get("x_password"),
-	)
-	if err != nil {
-		return
-	}
-
-	for _, cookie := range result.Cookies {
-		corehttp.UpdateCookie(w, cookie)
-	}
-
 	return
 }
 
@@ -355,6 +322,11 @@ func (p *AuthenticateProviderImpl) LoginIdentityProvider(w http.ResponseWriter, 
 	oauthProvider := p.OAuthProviderFactory.NewOAuthProvider(providerAlias)
 	if oauthProvider == nil {
 		err = ErrOAuthProviderNotFound
+		return
+	}
+
+	_, err = p.restoreState(r)
+	if err != nil {
 		return
 	}
 
@@ -410,6 +382,11 @@ func (p *AuthenticateProviderImpl) LinkIdentityProvider(w http.ResponseWriter, r
 
 	userID := auth.GetSession(r.Context()).AuthnAttrs().UserID
 
+	_, err = p.restoreState(r)
+	if err != nil {
+		return
+	}
+
 	// create or update ui state
 	// state id will be set into the request query
 	p.persistState(r, nil)
@@ -443,9 +420,10 @@ func (p *AuthenticateProviderImpl) LinkIdentityProvider(w http.ResponseWriter, r
 }
 
 func (p *AuthenticateProviderImpl) UnlinkIdentityProvider(w http.ResponseWriter, r *http.Request, providerAlias string) (writeResponse func(err error), err error) {
+	var result *interactionflows.WebAppResult
 	writeResponse = func(err error) {
 		p.persistState(r, err)
-		RedirectToCurrentPath(w, r)
+		p.handleResult(w, r, result, err)
 	}
 
 	providerConfig, ok := p.OAuthProviderFactory.GetOAuthProviderConfig(providerAlias)
@@ -456,11 +434,127 @@ func (p *AuthenticateProviderImpl) UnlinkIdentityProvider(w http.ResponseWriter,
 
 	userID := auth.GetSession(r.Context()).AuthnAttrs().UserID
 
-	// create or update ui state
-	// state id will be set into the request query
-	p.persistState(r, nil)
+	_, err = p.restoreState(r)
+	if err != nil {
+		return
+	}
 
-	_, err = p.Interactions.UnlinkWithOAuthProvider(userID, providerConfig)
+	r.Form.Set("redirect_uri", r.URL.Path)
+
+	result, err = p.Interactions.UnlinkWithOAuthProvider(userID, providerConfig)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+func (p *AuthenticateProviderImpl) AddOrChangeLoginID(w http.ResponseWriter, r *http.Request) (writeResponse func(error), err error) {
+	writeResponse = func(err error) {
+		p.persistState(r, err)
+		RedirectToPathWithX(w, r, "/enter_login_id")
+	}
+
+	_, err = p.restoreState(r)
+	if err != nil {
+		return
+	}
+
+	p.ValidateProvider.PrepareValues(r.Form)
+
+	err = p.ValidateProvider.Validate("#WebAppAddOrChangeLoginIDRequest", r.Form)
+	if err != nil {
+		return
+	}
+
+	r.Form.Set("redirect_uri", r.URL.Path)
+
+	return
+}
+
+func (p *AuthenticateProviderImpl) GetEnterLoginIDForm(w http.ResponseWriter, r *http.Request) (writeResponse func(error), err error) {
+	return p.get(w, r, TemplateItemTypeAuthUIEnterLoginIDHTML)
+}
+
+func (p *AuthenticateProviderImpl) EnterLoginID(w http.ResponseWriter, r *http.Request) (writeResponse func(error), err error) {
+	var result *interactionflows.WebAppResult
+	writeResponse = func(err error) {
+		p.persistState(r, err)
+		p.handleResult(w, r, result, err)
+	}
+
+	_, err = p.restoreState(r)
+	if err != nil {
+		return
+	}
+
+	p.ValidateProvider.PrepareValues(r.Form)
+
+	err = p.ValidateProvider.Validate("#WebAppEnterLoginIDRequest", r.Form)
+	if err != nil {
+		return
+	}
+
+	err = p.SetLoginID(r)
+	if err != nil {
+		return
+	}
+
+	userID := auth.GetSession(r.Context()).AuthnAttrs().UserID
+
+	oldLoginID := r.Form.Get("x_old_login_id_value")
+	if oldLoginID != "" {
+		result, err = p.Interactions.UpdateLoginID(
+			userID,
+			loginid.LoginID{
+				Key:   r.Form.Get("x_login_id_key"),
+				Value: oldLoginID,
+			},
+			loginid.LoginID{
+				Key:   r.Form.Get("x_login_id_key"),
+				Value: r.Form.Get("x_login_id"),
+			},
+		)
+	} else {
+		result, err = p.Interactions.AddLoginID(userID, loginid.LoginID{
+			Key:   r.Form.Get("x_login_id_key"),
+			Value: r.Form.Get("x_login_id"),
+		})
+	}
+	if err != nil {
+		return
+	}
+
+	r.Form["x_interaction_token"] = []string{result.Token}
+	return
+}
+
+func (p *AuthenticateProviderImpl) RemoveLoginID(w http.ResponseWriter, r *http.Request) (writeResponse func(error), err error) {
+	var result *interactionflows.WebAppResult
+	writeResponse = func(err error) {
+		p.persistState(r, err)
+		p.handleResult(w, r, result, err)
+	}
+
+	_, err = p.restoreState(r)
+	if err != nil {
+		return
+	}
+
+	p.ValidateProvider.PrepareValues(r.Form)
+
+	err = p.ValidateProvider.Validate("#WebAppRemoveLoginIDRequest", r.Form)
+	if err != nil {
+		return
+	}
+
+	userID := auth.GetSession(r.Context()).AuthnAttrs().UserID
+
+	result, err = p.Interactions.RemoveLoginID(userID, loginid.LoginID{
+		Key:   r.Form.Get("x_login_id_key"),
+		Value: r.Form.Get("x_old_login_id_value"),
+	})
+
 	if err != nil {
 		return
 	}
@@ -489,7 +583,7 @@ func (p *AuthenticateProviderImpl) HandleSSOCallback(w http.ResponseWriter, r *h
 			v.Set("x_sid", s.ID)
 			RedirectToPathWithQuery(w, r, callbackURL, v)
 		} else {
-			redirectURI, err := parseRedirectURI(r, callbackURL)
+			redirectURI, err := parseRedirectURI(r, callbackURL, false)
 			if err != nil {
 				redirectURI = DefaultRedirectURI
 			}

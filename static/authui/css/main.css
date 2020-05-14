@@ -28,6 +28,16 @@ button[disabled] {
   cursor: not-allowed;
 }
 
+a {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+a:link,
+a:visited {
+  color: #166bef;
+}
+
 select {
   -moz-appearance: none;
   -webkit-appearance: none;
@@ -55,7 +65,7 @@ select {
 
 .errors {
   list-style-type: none;
-  margin: 0;
+  margin: 10px;
   padding: 0;
 }
 
@@ -105,37 +115,28 @@ select {
   font-size: 14px;
   height: 32px;
   border-radius: 2px;
-  min-width: 100px;
 }
 
 .primary-btn {
   color: white;
   background-color: #166bef;
+  min-width: 100px;
 }
 
 .secondary-btn {
   color: #323130;
   border: 1px solid #8A8886;
+  min-width: 100px;
 }
 
 .destructive-btn {
   color: #323130;
   background-color: #CACACA;
-}
-
-.anchor {
-  text-decoration: none;
+  min-width: 100px;
 }
 
 .link {
   font-size: 12px;
-}
-
-.btn.anchor {
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  align-items: center;
 }
 
 button.link {
@@ -146,11 +147,11 @@ button.anchor {
   color: #166bef;
 }
 
-.anchor:link,
-.anchor:visited,
-.link:link,
-.link:visited {
-  color: #166bef;
+a.btn {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
 }
 
 .page {
@@ -211,39 +212,41 @@ button.anchor {
   }
 }
 
+.phone-input {
+  display: flex;
+  flex-direction: row;
+}
+
+.phone-input [name="x_calling_code"] {
+  margin: 0 3px 0 0;
+}
+
+.phone-input [name="x_national_number"] {
+  flex: 1;
+  margin: 0 0 0 3px;
+}
+
 .authorize-form {
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 10px;
 }
 
 .authorize-idp-form {
   display: flex;
   flex-direction: column;
+  margin: 10px;
 }
 
 .authorize-loginid-form {
   display: flex;
   flex-direction: column;
-}
-
-.authorize-loginid-form .phone-input {
-  display: flex;
-  flex-direction: row;
+  margin: 10px;
 }
 
 .authorize-loginid-form .link {
   display: block;
   padding: 4px 0;
-}
-
-.authorize-loginid-form [name="x_calling_code"] {
-  margin: 0 3px 0 0;
-}
-
-.authorize-loginid-form [name="x_national_number"] {
-  flex: 1;
-  margin: 0 0 0 3px;
 }
 
 .sso-btn {
@@ -291,7 +294,7 @@ button.anchor {
 
 .sso-loginid-separator {
   text-align: center;
-  margin: 15px 0;
+  margin: 10px;
 }
 
 .password-visibility-btn {
@@ -332,7 +335,7 @@ button.anchor {
 .simple-form {
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 10px;
 }
 
 .simple-form .title {
@@ -351,21 +354,14 @@ button.anchor {
 }
 
 .simple-form .login-id {
-  margin: 0 10px;
-}
-
-.simple-form .anchor {
-  padding: 4px 0;
+  margin: 10px;
 }
 
 .simple-form > input,
+.simple-form > button,
+.simple-form > a,
 .simple-form > div {
-  margin: 10px 0;
-}
-
-.simple-form > .anchor,
-.simple-form > .btn {
-  margin: 2px 0;
+  margin: 10px;
 }
 
 .settings-identity {
@@ -429,4 +425,10 @@ button.anchor {
 
 .login_id.phone {
   background-image: url("../image/ic_login_id_phone.png");
+}
+
+.enter-login-id-form .buttons {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
 }
