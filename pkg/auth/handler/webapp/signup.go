@@ -23,6 +23,7 @@ func AttachSignupHandler(
 type signupProvider interface {
 	GetCreateLoginIDForm(w http.ResponseWriter, r *http.Request) (func(error), error)
 	CreateLoginID(w http.ResponseWriter, r *http.Request) (func(error), error)
+	LoginIdentityProvider(w http.ResponseWriter, r *http.Request, providerAlias string) (func(error), error)
 }
 
 type SignupHandler struct {
@@ -44,6 +45,12 @@ func (h *SignupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if r.Method == "POST" {
+			if r.Form.Get("x_idp_id") != "" {
+				writeResponse, err := h.Provider.LoginIdentityProvider(w, r, r.Form.Get("x_idp_id"))
+				writeResponse(err)
+				return err
+			}
+
 			writeResponse, err := h.Provider.CreateLoginID(w, r)
 			writeResponse(err)
 			return err

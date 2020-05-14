@@ -23,14 +23,14 @@ func ProvideRenderProvider(
 	config *config.TenantConfiguration,
 	templateEngine *template.Engine,
 	passwordChecker *audit.PasswordChecker,
+	identityProvider IdentityProvider,
 ) RenderProvider {
 	return &RenderProviderImpl{
-		StaticAssetURLPrefix:        string(saup),
-		IdentityConfiguration:       config.AppConfig.Identity,
-		AuthenticationConfiguration: config.AppConfig.Authentication,
-		AuthUIConfiguration:         config.AppConfig.AuthUI,
-		PasswordChecker:             passwordChecker,
-		TemplateEngine:              templateEngine,
+		StaticAssetURLPrefix: string(saup),
+		AuthUIConfiguration:  config.AppConfig.AuthUI,
+		PasswordChecker:      passwordChecker,
+		TemplateEngine:       templateEngine,
+		Identity:             identityProvider,
 	}
 }
 

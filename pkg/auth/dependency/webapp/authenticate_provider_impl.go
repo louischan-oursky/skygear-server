@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/skygeario/skygear-server/pkg/auth/dependency/auth"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/authn"
 	"github.com/skygeario/skygear-server/pkg/auth/dependency/interaction"
 	interactionflows "github.com/skygeario/skygear-server/pkg/auth/dependency/interaction/flows"
@@ -26,15 +27,18 @@ type InteractionFlow interface {
 	TriggerOOBOTP(token string, step interaction.Step) (*interactionflows.WebAppResult, error)
 	SetupSecret(token string, secret string) (*interactionflows.WebAppResult, error)
 	LoginWithOAuthProvider(oauthAuthInfo sso.AuthInfo) (*interactionflows.WebAppResult, error)
+	LinkWithOAuthProvider(userID string, oauthAuthInfo sso.AuthInfo) (*interactionflows.WebAppResult, error)
+	UnlinkWithOAuthProvider(userID string, providerConfig config.OAuthProviderConfiguration) (*interactionflows.WebAppResult, error)
 }
 
 type AuthenticateProviderImpl struct {
-	ValidateProvider ValidateProvider
-	RenderProvider   RenderProvider
-	AuthnProvider    AuthnProvider
-	StateStore       StateStore
-	SSOProvider      sso.Provider
-	Interactions     InteractionFlow
+	ValidateProvider     ValidateProvider
+	RenderProvider       RenderProvider
+	AuthnProvider        AuthnProvider
+	StateStore           StateStore
+	SSOProvider          sso.Provider
+	Interactions         InteractionFlow
+	OAuthProviderFactory OAuthProviderFactory
 }
 
 type AuthnProvider interface {
@@ -57,9 +61,9 @@ type AuthnProvider interface {
 	WriteCookie(rw http.ResponseWriter, result *authn.CompletionResult)
 }
 
-type OAuthProvider interface {
-	GetAuthURL(state sso.State, encodedState string) (url string, err error)
-	GetAuthInfo(r sso.OAuthAuthorizationResponse, state sso.State) (sso.AuthInfo, error)
+type OAuthProviderFactory interface {
+	NewOAuthProvider(alias string) sso.OAuthProvider
+	GetOAuthProviderConfig(alias string) (config.OAuthProviderConfiguration, bool)
 }
 
 func (p *AuthenticateProviderImpl) makeState(sid string) *State {
@@ -337,16 +341,23 @@ func (p *AuthenticateProviderImpl) SetLoginID(r *http.Request) (err error) {
 	return
 }
 
-func (p *AuthenticateProviderImpl) ChooseIdentityProvider(w http.ResponseWriter, r *http.Request, oauthProvider OAuthProvider) (writeResponse func(err error), err error) {
+func (p *AuthenticateProviderImpl) LoginIdentityProvider(w http.ResponseWriter, r *http.Request, providerAlias string) (writeResponse func(err error), err error) {
 	var authURI string
 	writeResponse = func(err error) {
 		p.persistState(r, err)
 		if err != nil {
-			RedirectToPathWithX(w, r, "/login")
+			RedirectToCurrentPath(w, r)
 		} else {
 			http.Redirect(w, r, authURI, http.StatusFound)
 		}
 	}
+
+	oauthProvider := p.OAuthProviderFactory.NewOAuthProvider(providerAlias)
+	if oauthProvider == nil {
+		err = ErrOAuthProviderNotFound
+		return
+	}
+
 	// create or update ui state
 	// state id will be set into the request query
 	p.persistState(r, nil)
@@ -376,7 +387,88 @@ func (p *AuthenticateProviderImpl) ChooseIdentityProvider(w http.ResponseWriter,
 	return
 }
 
-func (p *AuthenticateProviderImpl) HandleSSOCallback(w http.ResponseWriter, r *http.Request, oauthProvider OAuthProvider) (writeResponse func(error), err error) {
+func (p *AuthenticateProviderImpl) GetSettingsIdentity(w http.ResponseWriter, r *http.Request) (writeResponse func(err error), err error) {
+	return p.get(w, r, TemplateItemTypeAuthUISettingsIdentityHTML)
+}
+
+func (p *AuthenticateProviderImpl) LinkIdentityProvider(w http.ResponseWriter, r *http.Request, providerAlias string) (writeResponse func(err error), err error) {
+	var authURI string
+	writeResponse = func(err error) {
+		p.persistState(r, err)
+		if err != nil {
+			RedirectToCurrentPath(w, r)
+		} else {
+			http.Redirect(w, r, authURI, http.StatusFound)
+		}
+	}
+
+	oauthProvider := p.OAuthProviderFactory.NewOAuthProvider(providerAlias)
+	if oauthProvider == nil {
+		err = ErrOAuthProviderNotFound
+		return
+	}
+
+	userID := auth.GetSession(r.Context()).AuthnAttrs().UserID
+
+	// create or update ui state
+	// state id will be set into the request query
+	p.persistState(r, nil)
+
+	// set hashed csrf cookies to sso state
+	// callback will verify if the request has the same cookie
+	cookie, err := r.Cookie(csrfCookieName)
+	if err != nil || cookie.Value == "" {
+		panic(errors.Newf("webapp: missing csrf cookies: %w", err))
+	}
+	hashedNonce := crypto.SHA256String(cookie.Value)
+	webappSSOState := SSOState{}
+	// Redirect back to the current page.
+	q := r.URL.Query()
+	q.Set("redirect_uri", r.URL.Path)
+	webappSSOState.SetRequestQuery(q.Encode())
+	state := sso.State{
+		Action: "link",
+		LinkState: sso.LinkState{
+			UserID: userID,
+		},
+		HashedNonce: hashedNonce,
+		Extra:       webappSSOState,
+	}
+	encodedState, err := p.SSOProvider.EncodeState(state)
+	if err != nil {
+		return
+	}
+	authURI, err = oauthProvider.GetAuthURL(state, encodedState)
+	return
+}
+
+func (p *AuthenticateProviderImpl) UnlinkIdentityProvider(w http.ResponseWriter, r *http.Request, providerAlias string) (writeResponse func(err error), err error) {
+	writeResponse = func(err error) {
+		p.persistState(r, err)
+		RedirectToCurrentPath(w, r)
+	}
+
+	providerConfig, ok := p.OAuthProviderFactory.GetOAuthProviderConfig(providerAlias)
+	if !ok {
+		err = ErrOAuthProviderNotFound
+		return
+	}
+
+	userID := auth.GetSession(r.Context()).AuthnAttrs().UserID
+
+	// create or update ui state
+	// state id will be set into the request query
+	p.persistState(r, nil)
+
+	_, err = p.Interactions.UnlinkWithOAuthProvider(userID, providerConfig)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+func (p *AuthenticateProviderImpl) HandleSSOCallback(w http.ResponseWriter, r *http.Request, providerAlias string) (writeResponse func(error), err error) {
 	v := url.Values{}
 	writeResponse = func(err error) {
 		callbackURL := v.Get("redirect_uri")
@@ -395,7 +487,7 @@ func (p *AuthenticateProviderImpl) HandleSSOCallback(w http.ResponseWriter, r *h
 			}
 			// x_sid maybe new if callback failed to obtain the state
 			v.Set("x_sid", s.ID)
-			RedirectToPathWithQuery(w, r, "/login", v)
+			RedirectToPathWithQuery(w, r, callbackURL, v)
 		} else {
 			redirectURI, err := parseRedirectURI(r, callbackURL)
 			if err != nil {
@@ -403,6 +495,12 @@ func (p *AuthenticateProviderImpl) HandleSSOCallback(w http.ResponseWriter, r *h
 			}
 			http.Redirect(w, r, redirectURI, http.StatusFound)
 		}
+	}
+
+	oauthProvider := p.OAuthProviderFactory.NewOAuthProvider(providerAlias)
+	if oauthProvider == nil {
+		err = ErrOAuthProviderNotFound
+		return
 	}
 
 	err = p.ValidateProvider.Validate("#SSOCallbackRequest", r.Form)
@@ -455,10 +553,11 @@ func (p *AuthenticateProviderImpl) HandleSSOCallback(w http.ResponseWriter, r *h
 	}
 
 	var result *interactionflows.WebAppResult
-	if state.Action == "login" {
+	switch state.Action {
+	case "login":
 		result, err = p.Interactions.LoginWithOAuthProvider(oauthAuthInfo)
-	} else {
-		panic("only login is supported")
+	case "link":
+		result, err = p.Interactions.LinkWithOAuthProvider(state.LinkState.UserID, oauthAuthInfo)
 	}
 
 	if err != nil {
