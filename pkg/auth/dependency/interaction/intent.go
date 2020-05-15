@@ -21,6 +21,7 @@ const (
 	IntentTypeUpdateIdentity      IntentType = "update-identity"
 	IntentTypeAddAuthenticator    IntentType = "add-authenticator"
 	IntentTypeRemoveAuthenticator IntentType = "remove-authenticator"
+	IntentTypeUpdateAuthenticator IntentType = "update-authenticator"
 )
 
 func NewIntent(t IntentType) Intent {
@@ -89,3 +90,11 @@ type IntentRemoveAuthenticator struct {
 }
 
 func (*IntentRemoveAuthenticator) Type() IntentType { return IntentTypeRemoveAuthenticator }
+
+type IntentUpdateAuthenticator struct {
+	Authenticator    authenticator.Spec `json:"authenticator"`
+	OldSecret        string             `json:"-"`
+	SkipVerifySecret bool               `json:"-"`
+}
+
+func (*IntentUpdateAuthenticator) Type() IntentType { return IntentTypeUpdateAuthenticator }

@@ -207,3 +207,33 @@ func (p *Provider) NewInteractionRemoveIdentity(intent *IntentRemoveIdentity, cl
 func (p *Provider) NewInteractionAddAuthenticator(intent *IntentAddAuthenticator, clientID string, session auth.AuthSession) (*Interaction, error) {
 	panic("TODO(interaction): implement it")
 }
+
+func (p *Provider) NewInteractionUpdateAuthenticator(
+	intent *IntentUpdateAuthenticator, clientID string, userID string,
+) (*Interaction, error) {
+	if intent.Authenticator.Type != authn.AuthenticatorTypePassword {
+		panic("interaction: update authenticator is not supported for type " + intent.Authenticator.Type)
+	}
+	i := &Interaction{
+		Intent:   intent,
+		ClientID: clientID,
+		UserID:   userID,
+	}
+	ais, err := p.Authenticator.List(i.UserID, intent.Authenticator.Type)
+	if err != nil {
+		return nil, err
+	}
+	if len(ais) != 1 {
+		return nil, ErrAuthenticatorNotFound
+	}
+	authen := ais[0]
+	if !intent.SkipVerifySecret {
+		err = p.Authenticator.VerifySecret(userID, authen, intent.OldSecret)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	i.PendingAuthenticator = authen
+	return i, nil
+}

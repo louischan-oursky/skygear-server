@@ -118,6 +118,7 @@ func TestProviderFlow(t *testing.T) {
 				).Return([]*authenticator.Info{ai}, nil)
 				authenticatorProvider.EXPECT().CreateAll(gomock.Any(), gomock.Eq([]*authenticator.Info{ai})).Return(nil)
 				var emptyAuthenticatorInfoList []*authenticator.Info
+				authenticatorProvider.EXPECT().UpdateAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
 				authenticatorProvider.EXPECT().DeleteAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
 
 				// step 2
@@ -215,6 +216,7 @@ func TestProviderFlow(t *testing.T) {
 
 				var emptyAuthenticatorInfoList []*authenticator.Info
 				authenticatorProvider.EXPECT().CreateAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
+				authenticatorProvider.EXPECT().UpdateAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
 				authenticatorProvider.EXPECT().DeleteAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
 
 				// step 2
@@ -340,6 +342,7 @@ func TestProviderFlow(t *testing.T) {
 
 			var emptyAuthenticatorInfoList []*authenticator.Info
 			authenticatorProvider.EXPECT().CreateAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
+			authenticatorProvider.EXPECT().UpdateAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
 			authenticatorProvider.EXPECT().DeleteAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
 
 			// step 2 authenticate secondary authenticator
@@ -569,6 +572,7 @@ func TestProviderFlow(t *testing.T) {
 				).Return([]*authenticator.Info{ai}, nil)
 				authenticatorProvider.EXPECT().CreateAll(gomock.Any(), gomock.Eq([]*authenticator.Info{ai})).Return(nil)
 				var emptyAuthenticatorInfoList []*authenticator.Info
+				authenticatorProvider.EXPECT().UpdateAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
 				authenticatorProvider.EXPECT().DeleteAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
 
 				// get user for hook
@@ -691,6 +695,7 @@ func TestProviderFlow(t *testing.T) {
 
 			var emptyAuthenticatorInfoList []*authenticator.Info
 			authenticatorProvider.EXPECT().CreateAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
+			authenticatorProvider.EXPECT().UpdateAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
 			// remove oob authenticator
 			authenticatorProvider.EXPECT().DeleteAll(gomock.Any(), gomock.Eq([]*authenticator.Info{oobai})).Return(nil)
 
@@ -801,6 +806,7 @@ func TestProviderFlow(t *testing.T) {
 				).Return([]*authenticator.Info{ai1, ai3}, nil)
 				var emptyAuthenticatorInfoList []*authenticator.Info
 				authenticatorProvider.EXPECT().CreateAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
+				authenticatorProvider.EXPECT().UpdateAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
 				authenticatorProvider.EXPECT().DeleteAll(gomock.Any(), gomock.Eq([]*authenticator.Info{ai2})).Return(nil)
 
 				// get user for hook
@@ -821,6 +827,118 @@ func TestProviderFlow(t *testing.T) {
 				So(err, ShouldBeNil)
 				So(state.Steps, ShouldHaveLength, 1)
 				So(state.Steps[0].Step, ShouldEqual, interaction.StepCommit)
+
+				_, err = p.Commit(i)
+				So(err, ShouldBeNil)
+			})
+
+		})
+
+		Convey("Update authenticator", func() {
+			// setup
+			p.Config = &config.AuthenticationConfiguration{
+				PrimaryAuthenticators: []string{"password"},
+			}
+			userID := "user_id_1"
+
+			ai := &authenticator.Info{
+				ID:   "authenticator_id_1",
+				Type: authn.AuthenticatorTypePassword,
+			}
+			nai := &authenticator.Info{
+				ID:   "authenticator_id_1",
+				Type: authn.AuthenticatorTypePassword,
+			}
+			authenticatorProvider.EXPECT().List(
+				gomock.Eq(userID), gomock.Eq(authn.AuthenticatorTypePassword),
+			).Return([]*authenticator.Info{ai}, nil).AnyTimes()
+
+			var emptyIdentityInfoList []*identity.Info
+			identityProvider.EXPECT().CreateAll(gomock.Any(), gomock.Eq(emptyIdentityInfoList)).Return(nil)
+			identityProvider.EXPECT().UpdateAll(gomock.Any(), gomock.Eq(emptyIdentityInfoList)).Return(nil)
+			identityProvider.EXPECT().DeleteAll(gomock.Any(), gomock.Eq(emptyIdentityInfoList)).Return(nil)
+
+			var emptyAuthenticatorInfoList []*authenticator.Info
+			authenticatorProvider.EXPECT().CreateAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
+			authenticatorProvider.EXPECT().DeleteAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
+
+			store.EXPECT().Delete(gomock.Any()).Return(nil)
+
+			Convey("should update authenticator", func() {
+				// setup
+				authenticatorProvider.EXPECT().WithSecret(
+					gomock.Eq(userID), gomock.Any(), gomock.Eq("newpassword"),
+				).Return(true, nai, nil)
+				// should verify old secret
+				authenticatorProvider.EXPECT().VerifySecret(
+					gomock.Eq(userID), gomock.Any(), gomock.Eq("samepassword"),
+				).Return(nil)
+				// should update authenticator
+				authenticatorProvider.EXPECT().UpdateAll(gomock.Any(), gomock.Eq([]*authenticator.Info{nai})).Return(nil)
+
+				// start flow
+				i, err := p.NewInteractionUpdateAuthenticator(&interaction.IntentUpdateAuthenticator{
+					Authenticator: authenticator.Spec{
+						Type: authn.AuthenticatorTypePassword,
+					},
+					OldSecret: "samepassword",
+				}, "", userID)
+				So(err, ShouldBeNil)
+
+				state, err := p.GetInteractionState(i)
+				So(err, ShouldBeNil)
+				So(state.Steps, ShouldHaveLength, 1)
+				So(state.Steps[0].Step, ShouldEqual, interaction.StepSetupPrimaryAuthenticator)
+
+				err = p.PerformAction(i, interaction.StepSetupPrimaryAuthenticator, &interaction.ActionSetupAuthenticator{
+					Authenticator: state.Steps[0].AvailableAuthenticators[0],
+					Secret:        "newpassword",
+				})
+				So(err, ShouldBeNil)
+
+				state, err = p.GetInteractionState(i)
+				So(err, ShouldBeNil)
+				So(state.Steps, ShouldHaveLength, 2)
+				So(state.Steps[0].Step, ShouldEqual, interaction.StepSetupPrimaryAuthenticator)
+				So(state.Steps[1].Step, ShouldEqual, interaction.StepCommit)
+
+				_, err = p.Commit(i)
+				So(err, ShouldBeNil)
+			})
+
+			Convey("should not update authenticator if no change", func() {
+				// setup
+				authenticatorProvider.EXPECT().WithSecret(
+					gomock.Eq(userID), gomock.Any(), gomock.Eq("samepassword"),
+				).Return(false, nai, nil)
+				// should not update any authenticator
+				authenticatorProvider.EXPECT().UpdateAll(gomock.Any(), gomock.Eq(emptyAuthenticatorInfoList)).Return(nil)
+
+				// start flow
+				i, err := p.NewInteractionUpdateAuthenticator(&interaction.IntentUpdateAuthenticator{
+					Authenticator: authenticator.Spec{
+						Type: authn.AuthenticatorTypePassword,
+					},
+					SkipVerifySecret: true,
+				}, "", userID)
+				So(err, ShouldBeNil)
+
+				state, err := p.GetInteractionState(i)
+				So(err, ShouldBeNil)
+				So(state.Steps, ShouldHaveLength, 1)
+				So(state.Steps[0].Step, ShouldEqual, interaction.StepSetupPrimaryAuthenticator)
+
+				err = p.PerformAction(i, interaction.StepSetupPrimaryAuthenticator, &interaction.ActionSetupAuthenticator{
+					Authenticator: state.Steps[0].AvailableAuthenticators[0],
+					Secret:        "samepassword",
+				})
+				So(err, ShouldBeNil)
+
+				state, err = p.GetInteractionState(i)
+				So(err, ShouldBeNil)
+				So(state.Steps, ShouldHaveLength, 2)
+				So(state.Steps[0].Step, ShouldEqual, interaction.StepSetupPrimaryAuthenticator)
+				So(state.Steps[1].Step, ShouldEqual, interaction.StepCommit)
 
 				_, err = p.Commit(i)
 				So(err, ShouldBeNil)
